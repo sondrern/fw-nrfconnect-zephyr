@@ -27,6 +27,23 @@ config I2C_1
 
 endif # I2C
 
+if SPI_MCUX_LPSPI
+
+config SPI_0
+	default y
+
+config SPI_1
+	default y
+
+endif # SPI_MCUX_LPSPI
+
+if CAN
+
+config CAN_0
+	default y
+
+endif # CAN
+
 if PINMUX_MCUX
 
 config PINMUX_MCUX_PORTA
@@ -64,5 +81,22 @@ config GPIO_MCUX_PORTE
 	default y
 
 endif # GPIO_MCUX
+
+if ADC
+
+config ADC_0
+	default y
+
+endif # ADC
+
+if PWM
+
+config PWM_0
+	default y
+
+config PWM_3
+	default y
+
+endif # PWM
 
 endif # BOARD_TWR_KE18F

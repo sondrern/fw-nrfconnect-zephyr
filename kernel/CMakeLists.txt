@@ -5,6 +5,7 @@
 add_library(${KERNEL_LIBRARY}
   device.c
   errno.c
+  fatal.c
   idle.c
   init.c
   mailbox.c
@@ -34,7 +35,6 @@ set_target_properties(
   __ZEPHYR_SUPERVISOR__
   )
 
-target_sources_ifdef(CONFIG_INT_LATENCY_BENCHMARK ${KERNEL_LIBRARY} PRIVATE int_latency_bench.c)
 target_sources_ifdef(CONFIG_STACK_CANARIES        ${KERNEL_LIBRARY} PRIVATE compiler_stack_protect.c)
 target_sources_ifdef(CONFIG_SYS_CLOCK_EXISTS      ${KERNEL_LIBRARY} PRIVATE timeout.c timer.c)
 target_sources_ifdef(CONFIG_ATOMIC_OPERATIONS_C   ${KERNEL_LIBRARY} PRIVATE atomic_c.c)
@@ -47,6 +47,7 @@ target_sources_if_kconfig(                        ${KERNEL_LIBRARY} PRIVATE poll
 target_sources_ifdef(
   CONFIG_USERSPACE
   ${KERNEL_LIBRARY} PRIVATE
+  futex.c
   mem_domain.c
   userspace_handler.c
   userspace.c

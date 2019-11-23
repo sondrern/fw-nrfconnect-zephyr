@@ -5,16 +5,15 @@
  */
 
 #include <device.h>
-#include <i2c.h>
-#include <misc/util.h>
+#include <drivers/i2c.h>
+#include <sys/util.h>
 #include <kernel.h>
-#include <sensor.h>
+#include <drivers/sensor.h>
 
 #include "bma280.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_DECLARE(BMA280);
+LOG_MODULE_DECLARE(BMA280, CONFIG_SENSOR_LOG_LEVEL);
 
 int bma280_attr_set(struct device *dev,
 		    enum sensor_channel chan,
@@ -270,7 +269,7 @@ int bma280_init_interrupt(struct device *dev)
 			CONFIG_BMA280_THREAD_STACK_SIZE,
 			(k_thread_entry_t)bma280_thread, dev,
 			0, NULL, K_PRIO_COOP(CONFIG_BMA280_THREAD_PRIORITY),
-			0, 0);
+			0, K_NO_WAIT);
 #elif defined(CONFIG_BMA280_TRIGGER_GLOBAL_THREAD)
 	drv_data->work.handler = bma280_work_cb;
 	drv_data->dev = dev;

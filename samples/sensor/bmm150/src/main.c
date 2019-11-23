@@ -6,8 +6,8 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <misc/printk.h>
-#include <sensor.h>
+#include <sys/printk.h>
+#include <drivers/sensor.h>
 #include <stdio.h>
 
 void do_main(struct device *dev)
@@ -31,7 +31,7 @@ void do_main(struct device *dev)
 				sensor_value_to_double(&y),
 				sensor_value_to_double(&z));
 
-		k_sleep(500);
+		k_sleep(K_MSEC(500));
 	}
 }
 

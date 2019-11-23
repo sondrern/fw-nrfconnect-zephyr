@@ -6,9 +6,9 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
+#include <drivers/sensor.h>
 #include <stdio.h>
-#include <misc/printk.h>
+#include <sys/printk.h>
 #ifdef CONFIG_SX9500_TRIGGER
 
 static void sensor_trigger_handler(struct device *dev, struct sensor_trigger *trig)
@@ -44,7 +44,7 @@ void do_main(struct device *dev)
 	setup_trigger(dev);
 
 	while (1) {
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }
 
@@ -65,7 +65,7 @@ static void do_main(struct device *dev)
 		ret = sensor_channel_get(dev, SENSOR_CHAN_PROX, &prox_value);
 		printk("prox is %d\n", prox_value.val1);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }
 

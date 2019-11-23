@@ -8,6 +8,7 @@
 #include <init.h>
 #include <kernel.h>
 #include <soc.h>
+#include <kernel_structs.h>
 
 #include "arm_core_mpu_dev.h"
 #include <linker/linker-defs.h>
@@ -22,7 +23,7 @@ LOG_MODULE_REGISTER(mpu);
  * available MPU regions for dynamic programming depends on the number of the
  * static MPU regions currently being programmed, and the total number of HW-
  * available MPU regions. This macro is only used internally in function
- * z_arch_configure_dynamic_mpu_regions(), to reserve sufficient area for the
+ * z_arm_configure_dynamic_mpu_regions(), to reserve sufficient area for the
  * array of dynamic regions passed to the underlying driver.
  */
 #if defined(CONFIG_USERSPACE)
@@ -58,7 +59,7 @@ LOG_MODULE_REGISTER(mpu);
  * For some MPU architectures, such as the unmodified ARMv8-M MPU,
  * the function must execute with MPU enabled.
  */
-void z_arch_configure_static_mpu_regions(void)
+void z_arm_configure_static_mpu_regions(void)
 {
 #if defined(CONFIG_COVERAGE_GCOV) && defined(CONFIG_USERSPACE)
 		const struct k_mem_partition gcov_region =
@@ -141,7 +142,7 @@ void z_arch_configure_static_mpu_regions(void)
  * For some MPU architectures, such as the unmodified ARMv8-M MPU,
  * the function must execute with MPU enabled.
  */
-void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread)
+void z_arm_configure_dynamic_mpu_regions(struct k_thread *thread)
 {
 	/* Define an array of k_mem_partition objects to hold the configuration
 	 * of the respective dynamic MPU regions to be programmed for
@@ -175,7 +176,7 @@ void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread)
 				 */
 				continue;
 			}
-			LOG_DBG("set region 0x%x 0x%x",
+			LOG_DBG("set region 0x%lx 0x%x",
 				partition.start, partition.size);
 			__ASSERT(region_num < _MAX_DYNAMIC_MPU_REGIONS_NUM,
 				"Out-of-bounds error for dynamic region map.");
@@ -212,19 +213,30 @@ void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread)
 
 	/* Privileged stack guard */
 	u32_t guard_start;
+	u32_t guard_size = MPU_GUARD_ALIGN_AND_SIZE;
+
+#if defined(CONFIG_FLOAT) && defined(CONFIG_FP_SHARING)
+	if ((thread->base.user_options & K_FP_REGS) != 0) {
+		guard_size = MPU_GUARD_ALIGN_AND_SIZE_FLOAT;
+	}
+#endif
+
 #if defined(CONFIG_USERSPACE)
 	if (thread->arch.priv_stack_start) {
-		guard_start = thread->arch.priv_stack_start;
+		guard_start = thread->arch.priv_stack_start - guard_size;
+
+		__ASSERT((u32_t)&z_priv_stacks_ram_start <= guard_start,
+		"Guard start: (0x%x) below privilege stacks boundary: (0x%x)",
+		guard_start, (u32_t)&z_priv_stacks_ram_start);
 	} else {
-		guard_start = thread->stack_info.start -
-			MPU_GUARD_ALIGN_AND_SIZE;
+		guard_start = thread->stack_info.start - guard_size;
+
 		__ASSERT((u32_t)thread->stack_obj == guard_start,
 		"Guard start (0x%x) not beginning at stack object (0x%x)\n",
 		guard_start, (u32_t)thread->stack_obj);
 	}
 #else
-	guard_start = thread->stack_info.start -
-		MPU_GUARD_ALIGN_AND_SIZE;
+	guard_start = thread->stack_info.start - guard_size;
 #endif /* CONFIG_USERSPACE */
 
 	__ASSERT(region_num < _MAX_DYNAMIC_MPU_REGIONS_NUM,
@@ -232,7 +244,7 @@ void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread)
 	guard = (const struct k_mem_partition)
 	{
 		guard_start,
-		MPU_GUARD_ALIGN_AND_SIZE,
+		guard_size,
 		K_MEM_PARTITION_P_RO_U_NA
 	};
 	dynamic_regions[region_num] = &guard;
@@ -247,12 +259,6 @@ void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread)
 }
 
 #if defined(CONFIG_USERSPACE)
-
-/**
- * @brief Get the maximum number of partitions for a memory domain
- *        that is supported by the MPU hardware, and with respect
- *        to the current static memory region configuration.
- */
 int z_arch_mem_domain_max_partitions_get(void)
 {
 	int available_regions = arm_core_mpu_get_max_available_dyn_regions();
@@ -268,24 +274,19 @@ int z_arch_mem_domain_max_partitions_get(void)
 	return ARM_CORE_MPU_MAX_DOMAIN_PARTITIONS_GET(available_regions);
 }
 
-/**
- * @brief Configure the memory domain of the thread.
- */
-void z_arch_mem_domain_configure(struct k_thread *thread)
+void z_arch_mem_domain_thread_add(struct k_thread *thread)
 {
+	if (_current != thread) {
+		return;
+	}
+
 	/* Request to configure memory domain for a thread.
 	 * This triggers re-programming of the entire dynamic
 	 * memory map.
 	 */
-	z_arch_configure_dynamic_mpu_regions(thread);
+	z_arm_configure_dynamic_mpu_regions(thread);
 }
 
-/*
- * @brief Reset the MPU configuration related to the memory domain
- *        partitions
- *
- * @param domain pointer to the memory domain (must be valid)
- */
 void z_arch_mem_domain_destroy(struct k_mem_domain *domain)
 {
 	/* This function will reset the access permission configuration
@@ -293,6 +294,11 @@ void z_arch_mem_domain_destroy(struct k_mem_domain *domain)
 	 */
 	int i;
 	struct k_mem_partition partition;
+
+	if (_current->mem_domain_info.mem_domain != domain) {
+		return;
+	}
+
 	/* Partitions belonging to the memory domain will be reset
 	 * to default (Privileged RW, Unprivileged NA) permissions.
 	 */
@@ -311,13 +317,6 @@ void z_arch_mem_domain_destroy(struct k_mem_domain *domain)
 	}
 }
 
-/*
- * @brief Remove a partition from the memory domain
- *
- * @param domain pointer to the memory domain (must be valid
- * @param partition_id the ID (sequence) number of the memory domain
- *        partition (must be a valid partition).
- */
 void z_arch_mem_domain_partition_remove(struct k_mem_domain *domain,
 				       u32_t  partition_id)
 {
@@ -326,6 +325,10 @@ void z_arch_mem_domain_partition_remove(struct k_mem_domain *domain,
 	 * to default (Privileged RW, Unprivileged NA).
 	 */
 	k_mem_partition_attr_t reset_attr = K_MEM_PARTITION_P_RW_U_NA;
+
+	if (_current->mem_domain_info.mem_domain != domain) {
+		return;
+	}
 
 	arm_core_mpu_mem_partition_config_update(
 		&domain->partitions[partition_id], &reset_attr);
@@ -337,9 +340,15 @@ void z_arch_mem_domain_partition_add(struct k_mem_domain *domain,
 	/* No-op on this architecture */
 }
 
-/*
- * Validate the given buffer is user accessible or not
- */
+void z_arch_mem_domain_thread_remove(struct k_thread *thread)
+{
+	if (_current != thread) {
+		return;
+	}
+
+	z_arch_mem_domain_destroy(thread->mem_domain_info.mem_domain);
+}
+
 int z_arch_buffer_validate(void *addr, size_t size, int write)
 {
 	return arm_core_mpu_buffer_validate(addr, size, write);

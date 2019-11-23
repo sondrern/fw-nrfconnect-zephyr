@@ -6,18 +6,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <sensor.h>
+#include <drivers/sensor.h>
 #include <kernel.h>
 #include <device.h>
 #include <init.h>
-#include <misc/byteorder.h>
-#include <misc/__assert.h>
+#include <sys/byteorder.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "lps22hb.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(LPS22HB);
+LOG_MODULE_REGISTER(LPS22HB, CONFIG_SENSOR_LOG_LEVEL);
 
 static inline int lps22hb_set_odr_raw(struct device *dev, u8_t odr)
 {
@@ -152,12 +151,12 @@ static int lps22hb_init(struct device *dev)
 }
 
 static const struct lps22hb_config lps22hb_config = {
-	.i2c_master_dev_name = DT_ST_LPS22HB_PRESS_0_BUS_NAME,
-	.i2c_slave_addr = DT_ST_LPS22HB_PRESS_0_BASE_ADDRESS,
+	.i2c_master_dev_name = DT_INST_0_ST_LPS22HB_PRESS_BUS_NAME,
+	.i2c_slave_addr = DT_INST_0_ST_LPS22HB_PRESS_BASE_ADDRESS,
 };
 
 static struct lps22hb_data lps22hb_data;
 
-DEVICE_AND_API_INIT(lps22hb, DT_ST_LPS22HB_PRESS_0_LABEL, lps22hb_init,
+DEVICE_AND_API_INIT(lps22hb, DT_INST_0_ST_LPS22HB_PRESS_LABEL, lps22hb_init,
 		    &lps22hb_data, &lps22hb_config, POST_KERNEL,
 		    CONFIG_SENSOR_INIT_PRIORITY, &lps22hb_api_funcs);

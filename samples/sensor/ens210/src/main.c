@@ -6,15 +6,15 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
-#include <misc/printk.h>
+#include <drivers/sensor.h>
+#include <sys/printk.h>
 
 void main(void)
 {
 	struct device *dev;
 	struct sensor_value temperature, humidity;
 
-	dev = device_get_binding(DT_AMS_ENS210_0_LABEL);
+	dev = device_get_binding(DT_INST_0_AMS_ENS210_LABEL);
 	if (!dev) {
 		printk("Failed to get device binding");
 		return;
@@ -30,6 +30,6 @@ void main(void)
 			temperature.val1, temperature.val2,
 			humidity.val1, humidity.val2);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }

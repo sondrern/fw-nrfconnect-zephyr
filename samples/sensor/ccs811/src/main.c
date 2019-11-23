@@ -6,8 +6,8 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
-#include <misc/printk.h>
+#include <drivers/sensor.h>
+#include <sys/printk.h>
 
 static void do_main(struct device *dev)
 {
@@ -25,7 +25,7 @@ static void do_main(struct device *dev)
 		printk("Voltage: %d.%06dV; Current: %d.%06dA\n\n", voltage.val1,
 				voltage.val2, current.val1, current.val2);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 
 }
@@ -34,7 +34,7 @@ void main(void)
 {
 	struct device *dev;
 
-	dev = device_get_binding(DT_AMS_CCS811_0_LABEL);
+	dev = device_get_binding(DT_INST_0_AMS_CCS811_LABEL);
 	if (!dev) {
 		printk("Failed to get device binding");
 		return;

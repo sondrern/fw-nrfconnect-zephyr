@@ -5,17 +5,15 @@
  */
 
 #include <device.h>
-#include <i2c.h>
-#include <misc/__assert.h>
-#include <misc/util.h>
+#include <drivers/i2c.h>
+#include <sys/__assert.h>
+#include <sys/util.h>
 #include <kernel.h>
-#include <sensor.h>
-
+#include <drivers/sensor.h>
+#include <logging/log.h>
 #include "hts221.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-#include <logging/log.h>
-LOG_MODULE_DECLARE(HTS221);
+LOG_MODULE_DECLARE(HTS221, CONFIG_SENSOR_LOG_LEVEL);
 
 int hts221_trigger_set(struct device *dev,
 			const struct sensor_trigger *trig,
@@ -26,7 +24,7 @@ int hts221_trigger_set(struct device *dev,
 	__ASSERT_NO_MSG(trig->type == SENSOR_TRIG_DATA_READY);
 
 	gpio_pin_disable_callback(drv_data->gpio,
-				  DT_ST_HTS221_0_DRDY_GPIOS_PIN);
+				  DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN);
 
 	drv_data->data_ready_handler = handler;
 	if (handler == NULL) {
@@ -36,7 +34,7 @@ int hts221_trigger_set(struct device *dev,
 	drv_data->data_ready_trigger = *trig;
 
 	gpio_pin_enable_callback(drv_data->gpio,
-				 DT_ST_HTS221_0_DRDY_GPIOS_PIN);
+				 DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN);
 
 	return 0;
 }
@@ -49,7 +47,7 @@ static void hts221_gpio_callback(struct device *dev,
 
 	ARG_UNUSED(pins);
 
-	gpio_pin_disable_callback(dev, DT_ST_HTS221_0_DRDY_GPIOS_PIN);
+	gpio_pin_disable_callback(dev, DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN);
 
 #if defined(CONFIG_HTS221_TRIGGER_OWN_THREAD)
 	k_sem_give(&drv_data->gpio_sem);
@@ -68,7 +66,7 @@ static void hts221_thread_cb(void *arg)
 					     &drv_data->data_ready_trigger);
 	}
 
-	gpio_pin_enable_callback(drv_data->gpio, DT_ST_HTS221_0_DRDY_GPIOS_PIN);
+	gpio_pin_enable_callback(drv_data->gpio, DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN);
 }
 
 #ifdef CONFIG_HTS221_TRIGGER_OWN_THREAD
@@ -102,20 +100,20 @@ int hts221_init_interrupt(struct device *dev)
 
 	/* setup data ready gpio interrupt */
 	drv_data->gpio =
-		device_get_binding(DT_ST_HTS221_0_DRDY_GPIOS_CONTROLLER);
+		device_get_binding(DT_INST_0_ST_HTS221_DRDY_GPIOS_CONTROLLER);
 	if (drv_data->gpio == NULL) {
 		LOG_ERR("Cannot get pointer to %s device.",
-			    DT_ST_HTS221_0_DRDY_GPIOS_CONTROLLER);
+			    DT_INST_0_ST_HTS221_DRDY_GPIOS_CONTROLLER);
 		return -EINVAL;
 	}
 
-	gpio_pin_configure(drv_data->gpio, DT_ST_HTS221_0_DRDY_GPIOS_PIN,
+	gpio_pin_configure(drv_data->gpio, DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN,
 			   GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
 			   GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
 
 	gpio_init_callback(&drv_data->gpio_cb,
 			   hts221_gpio_callback,
-			   BIT(DT_ST_HTS221_0_DRDY_GPIOS_PIN));
+			   BIT(DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN));
 
 	if (gpio_add_callback(drv_data->gpio, &drv_data->gpio_cb) < 0) {
 		LOG_ERR("Could not set gpio callback.");
@@ -123,7 +121,7 @@ int hts221_init_interrupt(struct device *dev)
 	}
 
 	/* enable data-ready interrupt */
-	if (i2c_reg_write_byte(drv_data->i2c, DT_ST_HTS221_0_BASE_ADDRESS,
+	if (i2c_reg_write_byte(drv_data->i2c, DT_INST_0_ST_HTS221_BASE_ADDRESS,
 			       HTS221_REG_CTRL3, HTS221_DRDY_EN) < 0) {
 		LOG_ERR("Could not enable data-ready interrupt.");
 		return -EIO;
@@ -136,13 +134,13 @@ int hts221_init_interrupt(struct device *dev)
 			CONFIG_HTS221_THREAD_STACK_SIZE,
 			(k_thread_entry_t)hts221_thread, dev,
 			0, NULL, K_PRIO_COOP(CONFIG_HTS221_THREAD_PRIORITY),
-			0, 0);
+			0, K_NO_WAIT);
 #elif defined(CONFIG_HTS221_TRIGGER_GLOBAL_THREAD)
 	drv_data->work.handler = hts221_work_cb;
 	drv_data->dev = dev;
 #endif
 
-	gpio_pin_enable_callback(drv_data->gpio, DT_ST_HTS221_0_DRDY_GPIOS_PIN);
+	gpio_pin_enable_callback(drv_data->gpio, DT_INST_0_ST_HTS221_DRDY_GPIOS_PIN);
 
 	return 0;
 }

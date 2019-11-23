@@ -6,18 +6,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <sensor.h>
+#include <drivers/sensor.h>
 #include <kernel.h>
 #include <device.h>
 #include <init.h>
-#include <misc/byteorder.h>
-#include <misc/__assert.h>
+#include <sys/byteorder.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "lps25hb.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(LPS25HB);
+LOG_MODULE_REGISTER(LPS25HB, CONFIG_SENSOR_LOG_LEVEL);
 
 static inline int lps25hb_power_ctrl(struct device *dev, u8_t value)
 {
@@ -180,12 +179,12 @@ static int lps25hb_init(struct device *dev)
 }
 
 static const struct lps25hb_config lps25hb_config = {
-	.i2c_master_dev_name = DT_ST_LPS25HB_PRESS_0_BUS_NAME,
-	.i2c_slave_addr = DT_ST_LPS25HB_PRESS_0_BASE_ADDRESS,
+	.i2c_master_dev_name = DT_INST_0_ST_LPS25HB_PRESS_BUS_NAME,
+	.i2c_slave_addr = DT_INST_0_ST_LPS25HB_PRESS_BASE_ADDRESS,
 };
 
 static struct lps25hb_data lps25hb_data;
 
-DEVICE_AND_API_INIT(lps25hb, DT_ST_LPS25HB_PRESS_0_LABEL, lps25hb_init,
+DEVICE_AND_API_INIT(lps25hb, DT_INST_0_ST_LPS25HB_PRESS_LABEL, lps25hb_init,
 		    &lps25hb_data, &lps25hb_config, POST_KERNEL,
 		    CONFIG_SENSOR_INIT_PRIORITY, &lps25hb_api_funcs);

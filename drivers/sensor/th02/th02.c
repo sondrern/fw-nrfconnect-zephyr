@@ -6,17 +6,16 @@
 
 #include <kernel.h>
 #include <device.h>
-#include <i2c.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
-#include <sensor.h>
-#include <misc/__assert.h>
+#include <drivers/i2c.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "th02.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(TH02);
+LOG_MODULE_REGISTER(TH02, CONFIG_SENSOR_LOG_LEVEL);
 
 static u8_t read8(struct device *dev, u8_t d)
 {
@@ -56,7 +55,6 @@ static u16_t get_humi(struct device *dev)
 	}
 	while (!is_ready(dev)) {
 	}
-	;
 
 	humidity = read8(dev, TH02_REG_DATA_H) << 8;
 	humidity |= read8(dev, TH02_REG_DATA_L);
@@ -76,7 +74,6 @@ u16_t get_temp(struct device *dev)
 	}
 	while (!is_ready(dev)) {
 	}
-	;
 
 	temperature = read8(dev, TH02_REG_DATA_H) << 8;
 	temperature |= read8(dev, TH02_REG_DATA_L);

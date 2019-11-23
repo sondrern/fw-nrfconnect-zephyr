@@ -6,6 +6,7 @@
 
 /dts-v1/;
 #include <st/f4/stm32f411Xe.dtsi>
+#include "arduino_r3_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32F411RE-NUCLEO board";
@@ -44,18 +45,18 @@
 	current-speed = <115200>;
 	pinctrl-0 = <&usart1_pins_a>;
 	pinctrl-names = "default";
-	status = "ok";
+	status = "okay";
 };
 
 &usart2 {
 	current-speed = <115200>;
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-names = "default";
-	status = "ok";
+	status = "okay";
 };
 
-arduino_i2c: &i2c1 {
-	status = "ok";
+&i2c1 {
+	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
 };
 
@@ -67,10 +68,10 @@ arduino_i2c: &i2c1 {
 	clock-frequency = <I2C_BITRATE_FAST>;
 };
 
-arduino_spi: &spi1 {
-	status = "ok";
+&spi1 {
+	status = "okay";
 };
 
 &rtc {
-	status = "ok";
+	status = "okay";
 };

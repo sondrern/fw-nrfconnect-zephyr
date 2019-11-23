@@ -5,7 +5,7 @@
  */
 
 #include <device.h>
-#include <display.h>
+#include <drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
 #include <string.h>
@@ -45,7 +45,7 @@ void main(void)
 			lv_label_set_text(count_label, count_str);
 		}
 		lv_task_handler();
-		k_sleep(10);
+		k_sleep(K_MSEC(10));
 		++count;
 	}
 }

@@ -12,12 +12,19 @@
 #include <device.h>
 #include <init.h>
 #include <soc.h>
-#include <flash.h>
+#include <drivers/flash.h>
 #include <string.h>
 #include <nrfx_nvmc.h>
 
+#if CONFIG_ARM_NONSECURE_FIRMWARE && CONFIG_SPM
+#include <secure_services.h>
+#if USE_PARTITION_MANAGER
+#include <pm_config.h>
+#endif /* USE_PARTITION_MANAGER */
+#endif /* CONFIG_ARM_NONSECURE_FIRMWARE  && CONFIG_SPM */
+
 #if defined(CONFIG_SOC_FLASH_NRF_RADIO_SYNC)
-#include <misc/__assert.h>
+#include <sys/__assert.h>
 #include <bluetooth/hci.h>
 #include "controller/hal/ticker.h"
 #include "controller/ticker/ticker.h"
@@ -92,13 +99,12 @@ static inline bool is_regular_addr_valid(off_t addr, size_t len)
 {
 	size_t flash_size = nrfx_nvmc_flash_size_get();
 
-	if (addr >= flash_size ||
-	    addr < 0 ||
+	if (addr >= DT_FLASH_BASE_ADDRESS + flash_size ||
+	    addr < DT_FLASH_BASE_ADDRESS ||
 	    len > flash_size ||
-	    addr + len > flash_size) {
+	    (addr - DT_FLASH_BASE_ADDRESS) + len > flash_size) {
 		return false;
 	}
-
 	return true;
 }
 
@@ -128,7 +134,6 @@ static inline bool is_addr_valid(off_t addr, size_t len)
 static void nvmc_wait_ready(void)
 {
 	while (!nrfx_nvmc_write_done_check()) {
-		;
 	}
 }
 
@@ -142,6 +147,12 @@ static int flash_nrf_read(struct device *dev, off_t addr,
 	if (!len) {
 		return 0;
 	}
+
+#if CONFIG_ARM_NONSECURE_FIRMWARE && CONFIG_SPM && USE_PARTITION_MANAGER
+	if (addr < PM_APP_ADDRESS) {
+		return spm_request_read(data, addr, len);
+	}
+#endif
 
 	memcpy(data, (void *)addr, len);
 

@@ -5,19 +5,18 @@
  */
 
 #include <device.h>
-#include <gpio.h>
-#include <i2c.h>
+#include <drivers/gpio.h>
+#include <drivers/i2c.h>
 #include <kernel.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
-#include <sensor.h>
-#include <misc/__assert.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "ccs811.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(CCS811);
+LOG_MODULE_REGISTER(CCS811, CONFIG_SENSOR_LOG_LEVEL);
 
 static int ccs811_sample_fetch(struct device *dev, enum sensor_channel chan)
 {
@@ -28,7 +27,7 @@ static int ccs811_sample_fetch(struct device *dev, enum sensor_channel chan)
 
 	/* Check data ready flag for the measurement interval of 1 seconds */
 	while (tries-- > 0) {
-		if (i2c_reg_read_byte(drv_data->i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+		if (i2c_reg_read_byte(drv_data->i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 				      CCS811_REG_STATUS, &status) < 0) {
 			LOG_ERR("Failed to read Status register");
 			return -EIO;
@@ -38,7 +37,7 @@ static int ccs811_sample_fetch(struct device *dev, enum sensor_channel chan)
 			break;
 		}
 
-		k_sleep(100);
+		k_sleep(K_MSEC(100));
 	}
 
 	if (!(status & CCS811_STATUS_DATA_READY)) {
@@ -46,7 +45,7 @@ static int ccs811_sample_fetch(struct device *dev, enum sensor_channel chan)
 		return -EIO;
 	}
 
-	if (i2c_burst_read(drv_data->i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_burst_read(drv_data->i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			   CCS811_REG_ALG_RESULT_DATA, (u8_t *)buf, 8) < 0) {
 		LOG_ERR("Failed to read conversion data.");
 		return -EIO;
@@ -117,7 +116,7 @@ static int switch_to_app_mode(struct device *i2c)
 
 	LOG_DBG("Switching to Application mode...");
 
-	if (i2c_reg_read_byte(i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_reg_read_byte(i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			      CCS811_REG_STATUS, &status) < 0) {
 		LOG_ERR("Failed to read Status register");
 		return -EIO;
@@ -131,12 +130,12 @@ static int switch_to_app_mode(struct device *i2c)
 
 	buf = CCS811_REG_APP_START;
 	/* Set the device to application mode */
-	if (i2c_write(i2c, &buf, 1, DT_AMS_CCS811_0_BASE_ADDRESS) < 0) {
+	if (i2c_write(i2c, &buf, 1, DT_INST_0_AMS_CCS811_BASE_ADDRESS) < 0) {
 		LOG_ERR("Failed to set Application mode");
 		return -EIO;
 	}
 
-	if (i2c_reg_read_byte(i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_reg_read_byte(i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			      CCS811_REG_STATUS, &status) < 0) {
 		LOG_ERR("Failed to read Status register");
 		return -EIO;
@@ -159,10 +158,10 @@ int ccs811_init(struct device *dev)
 	int ret;
 	u8_t hw_id, status;
 
-	drv_data->i2c = device_get_binding(DT_AMS_CCS811_0_BUS_NAME);
+	drv_data->i2c = device_get_binding(DT_INST_0_AMS_CCS811_BUS_NAME);
 	if (drv_data->i2c == NULL) {
 		LOG_ERR("Failed to get pointer to %s device!",
-			    DT_AMS_CCS811_0_BUS_NAME);
+			    DT_INST_0_AMS_CCS811_BUS_NAME);
 		return -EINVAL;
 	}
 
@@ -180,7 +179,7 @@ int ccs811_init(struct device *dev)
 			   GPIO_DIR_OUT);
 	gpio_pin_write(drv_data->gpio, CONFIG_CCS811_GPIO_RESET_PIN_NUM, 1);
 
-	k_sleep(1);
+	k_sleep(K_MSEC(1));
 #endif
 
 	/*
@@ -192,7 +191,7 @@ int ccs811_init(struct device *dev)
 			   GPIO_DIR_OUT);
 	gpio_pin_write(drv_data->gpio, CONFIG_CCS811_GPIO_WAKEUP_PIN_NUM, 0);
 
-	k_sleep(1);
+	k_sleep(K_MSEC(1));
 #endif
 
 	/* Switch device to application mode */
@@ -202,7 +201,7 @@ int ccs811_init(struct device *dev)
 	}
 
 	/* Check Hardware ID */
-	if (i2c_reg_read_byte(drv_data->i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_reg_read_byte(drv_data->i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			      CCS811_REG_HW_ID, &hw_id) < 0) {
 		LOG_ERR("Failed to read Hardware ID register");
 		return -EIO;
@@ -214,7 +213,7 @@ int ccs811_init(struct device *dev)
 	}
 
 	/* Set Measurement mode for 1 second */
-	if (i2c_reg_write_byte(drv_data->i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_reg_write_byte(drv_data->i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			       CCS811_REG_MEAS_MODE,
 			       CCS811_MODE_IAQ_1SEC) < 0) {
 		LOG_ERR("Failed to set Measurement mode");
@@ -222,7 +221,7 @@ int ccs811_init(struct device *dev)
 	}
 
 	/* Check for error */
-	if (i2c_reg_read_byte(drv_data->i2c, DT_AMS_CCS811_0_BASE_ADDRESS,
+	if (i2c_reg_read_byte(drv_data->i2c, DT_INST_0_AMS_CCS811_BASE_ADDRESS,
 			      CCS811_REG_STATUS, &status) < 0) {
 		LOG_ERR("Failed to read Status register");
 		return -EIO;
@@ -238,6 +237,6 @@ int ccs811_init(struct device *dev)
 
 static struct ccs811_data ccs811_driver;
 
-DEVICE_AND_API_INIT(ccs811, DT_AMS_CCS811_0_LABEL, ccs811_init, &ccs811_driver,
+DEVICE_AND_API_INIT(ccs811, DT_INST_0_AMS_CCS811_LABEL, ccs811_init, &ccs811_driver,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &ccs811_driver_api);

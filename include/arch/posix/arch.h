@@ -30,39 +30,64 @@
 extern "C" {
 #endif
 
+#ifdef CONFIG_64BIT
+#define STACK_ALIGN 8
+#define STACK_ALIGN_SIZE 8
+#else
 #define STACK_ALIGN 4
 #define STACK_ALIGN_SIZE 4
-
-#define _NANO_ERR_CPU_EXCEPTION (0)     /* Any unhandled exception */
-#define _NANO_ERR_INVALID_TASK_EXIT (1) /* Invalid task exit */
-#define _NANO_ERR_STACK_CHK_FAIL (2)    /* Stack corruption detected */
-#define _NANO_ERR_ALLOCATION_FAIL (3)   /* Kernel Allocation Failure */
-#define _NANO_ERR_SPURIOUS_INT (4)  /* Spurious interrupt */
-#define _NANO_ERR_KERNEL_OOPS (5)       /* Kernel oops (fatal to thread) */
-#define _NANO_ERR_KERNEL_PANIC (6)  /* Kernel panic (fatal to system) */
+#endif
 
 struct __esf {
-	u32_t dummy; /*maybe we will want to add somethign someday*/
+	u32_t dummy; /*maybe we will want to add something someday*/
 };
 
-typedef struct __esf NANO_ESF;
-extern const NANO_ESF _default_esf;
+typedef struct __esf z_arch_esf_t;
 
 extern u32_t z_timer_cycle_get_32(void);
-#define z_arch_k_cycle_get_32()  z_timer_cycle_get_32()
 
-FUNC_NORETURN void z_SysFatalErrorHandler(unsigned int reason,
-					 const NANO_ESF *esf);
+static inline u32_t z_arch_k_cycle_get_32(void)
+{
+	return z_timer_cycle_get_32();
+}
 
-FUNC_NORETURN void z_NanoFatalErrorHandler(unsigned int reason,
-					  const NANO_ESF *esf);
-
-/**
- * @brief Explicitly nop operation.
- */
-static ALWAYS_INLINE void arch_nop(void)
+static ALWAYS_INLINE void z_arch_nop(void)
 {
 	__asm__ volatile("nop");
+}
+
+static ALWAYS_INLINE unsigned int z_arch_irq_lock(void)
+{
+	return posix_irq_lock();
+}
+
+static ALWAYS_INLINE void z_arch_irq_unlock(unsigned int key)
+{
+	posix_irq_unlock(key);
+}
+
+static ALWAYS_INLINE void z_arch_irq_enable(unsigned int irq)
+{
+	posix_irq_enable(irq);
+}
+
+static ALWAYS_INLINE void z_arch_irq_disable(unsigned int irq)
+{
+	posix_irq_disable(irq);
+}
+
+static ALWAYS_INLINE int z_arch_irq_is_enabled(unsigned int irq)
+{
+	return posix_irq_is_enabled(irq);
+}
+
+/**
+ * Returns true if interrupts were unlocked prior to the
+ * z_arch_irq_lock() call that produced the key argument.
+ */
+static ALWAYS_INLINE bool z_arch_irq_unlocked(unsigned int key)
+{
+	return key == false;
 }
 
 #ifdef __cplusplus

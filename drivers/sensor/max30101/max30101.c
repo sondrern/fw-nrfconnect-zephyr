@@ -8,8 +8,7 @@
 
 #include "max30101.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(MAX30101);
+LOG_MODULE_REGISTER(MAX30101, CONFIG_SENSOR_LOG_LEVEL);
 
 static int max30101_sample_fetch(struct device *dev, enum sensor_channel chan)
 {
@@ -99,7 +98,7 @@ static int max30101_init(struct device *dev)
 	int fifo_chan;
 
 	/* Get the I2C device */
-	data->i2c = device_get_binding(DT_MAX_MAX30101_0_BUS_NAME);
+	data->i2c = device_get_binding(DT_INST_0_MAX_MAX30101_BUS_NAME);
 	if (!data->i2c) {
 		LOG_ERR("Could not find I2C device");
 		return -EINVAL;
@@ -242,7 +241,7 @@ static struct max30101_config max30101_config = {
 
 static struct max30101_data max30101_data;
 
-DEVICE_AND_API_INIT(max30101, DT_MAX_MAX30101_0_LABEL, max30101_init,
+DEVICE_AND_API_INIT(max30101, DT_INST_0_MAX_MAX30101_LABEL, max30101_init,
 		    &max30101_data, &max30101_config,
 		    POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &max30101_driver_api);

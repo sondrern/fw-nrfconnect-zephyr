@@ -13,14 +13,14 @@
 #include <soc.h>
 #include <toolchain.h>
 #include <errno.h>
-#include <atomic.h>
+#include <sys/atomic.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_vs.h>
 #include <bluetooth/buf.h>
 #include <bluetooth/bluetooth.h>
 #include <drivers/bluetooth/hci_driver.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
 
 #include "util/util.h"
 #include "util/memq.h"
@@ -32,6 +32,7 @@
 #include "ll_sw/ull_conn_types.h"
 #include "ll.h"
 #include "ll_feat.h"
+#include "ll_settings.h"
 #include "hci_internal.h"
 #include "hci_vendor.h"
 
@@ -46,6 +47,10 @@
 #if defined(CONFIG_BT_CTLR_DTM_HCI)
 #include "ll_sw/ll_test.h"
 #endif /* CONFIG_BT_CTLR_DTM_HCI */
+
+#if defined(CONFIG_BT_CTLR_USER_EXT)
+#include "hci_user_ext.h"
+#endif /* CONFIG_BT_CTLR_USER_EXT */
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_DEBUG_HCI_DRIVER)
 #define LOG_MODULE_NAME bt_ctlr_hci
@@ -120,7 +125,7 @@ void *hci_cmd_complete(struct net_buf **buf, u8_t plen)
 {
 	struct bt_hci_evt_cmd_complete *cc;
 
-	*buf = bt_buf_get_cmd_complete(K_FOREVER);
+	*buf = bt_buf_get_evt(BT_HCI_EVT_CMD_COMPLETE, false, K_FOREVER);
 
 	hci_evt_create(*buf, BT_HCI_EVT_CMD_COMPLETE, sizeof(*cc) + plen);
 
@@ -137,7 +142,7 @@ static struct net_buf *cmd_status(u8_t status)
 	struct bt_hci_evt_cmd_status *cs;
 	struct net_buf *buf;
 
-	buf = bt_buf_get_cmd_complete(K_FOREVER);
+	buf = bt_buf_get_evt(BT_HCI_EVT_CMD_STATUS, false, K_FOREVER);
 	hci_evt_create(buf, BT_HCI_EVT_CMD_STATUS, sizeof(*cs));
 
 	cs = net_buf_add(buf, sizeof(*cs));
@@ -514,8 +519,8 @@ static void read_local_version_info(struct net_buf *buf, struct net_buf **evt)
 	rp->hci_version = LL_VERSION_NUMBER;
 	rp->hci_revision = sys_cpu_to_le16(0);
 	rp->lmp_version = LL_VERSION_NUMBER;
-	rp->manufacturer = sys_cpu_to_le16(CONFIG_BT_CTLR_COMPANY_ID);
-	rp->lmp_subversion = sys_cpu_to_le16(CONFIG_BT_CTLR_SUBVERSION_NUMBER);
+	rp->manufacturer = sys_cpu_to_le16(ll_settings_company_id());
+	rp->lmp_subversion = sys_cpu_to_le16(ll_settings_subversion_number());
 }
 
 static void read_supported_commands(struct net_buf *buf, struct net_buf **evt)
@@ -527,8 +532,10 @@ static void read_supported_commands(struct net_buf *buf, struct net_buf **evt)
 	rp->status = 0x00;
 	(void)memset(&rp->commands[0], 0, sizeof(rp->commands));
 
+#if defined(CONFIG_BT_REMOTE_VERSION)
 	/* Read Remote Version Info. */
 	rp->commands[2] |= BIT(7);
+#endif
 	/* Set Event Mask, and Reset. */
 	rp->commands[5] |= BIT(6) | BIT(7);
 	/* Read TX Power Level. */
@@ -1277,11 +1284,15 @@ static void le_set_data_len(struct net_buf *buf, struct net_buf **evt)
 static void le_read_default_data_len(struct net_buf *buf, struct net_buf **evt)
 {
 	struct bt_hci_rp_le_read_default_data_len *rp;
+	u16_t max_tx_octets;
+	u16_t max_tx_time;
 
 	rp = hci_cmd_complete(evt, sizeof(*rp));
 
-	ll_length_default_get(&rp->max_tx_octets, &rp->max_tx_time);
+	ll_length_default_get(&max_tx_octets, &max_tx_time);
 
+	rp->max_tx_octets = sys_cpu_to_le16(max_tx_octets);
+	rp->max_tx_time = sys_cpu_to_le16(max_tx_time);
 	rp->status = 0x00;
 }
 
@@ -1290,9 +1301,13 @@ static void le_write_default_data_len(struct net_buf *buf,
 {
 	struct bt_hci_cp_le_write_default_data_len *cmd = (void *)buf->data;
 	struct bt_hci_evt_cc_status *ccst;
+	u16_t max_tx_octets;
+	u16_t max_tx_time;
 	u8_t status;
 
-	status = ll_length_default_set(cmd->max_tx_octets, cmd->max_tx_time);
+	max_tx_octets = sys_le16_to_cpu(cmd->max_tx_octets);
+	max_tx_time = sys_le16_to_cpu(cmd->max_tx_time);
+	status = ll_length_default_set(max_tx_octets, max_tx_time);
 
 	ccst = hci_cmd_complete(evt, sizeof(*ccst));
 	ccst->status = status;
@@ -1301,11 +1316,20 @@ static void le_write_default_data_len(struct net_buf *buf,
 static void le_read_max_data_len(struct net_buf *buf, struct net_buf **evt)
 {
 	struct bt_hci_rp_le_read_max_data_len *rp;
+	u16_t max_tx_octets;
+	u16_t max_tx_time;
+	u16_t max_rx_octets;
+	u16_t max_rx_time;
 
 	rp = hci_cmd_complete(evt, sizeof(*rp));
 
-	ll_length_max_get(&rp->max_tx_octets, &rp->max_tx_time,
-			  &rp->max_rx_octets, &rp->max_rx_time);
+	ll_length_max_get(&max_tx_octets, &max_tx_time,
+			  &max_rx_octets, &max_rx_time);
+
+	rp->max_tx_octets = sys_cpu_to_le16(max_tx_octets);
+	rp->max_tx_time = sys_cpu_to_le16(max_tx_time);
+	rp->max_tx_octets = sys_cpu_to_le16(max_tx_octets);
+	rp->max_tx_time = sys_cpu_to_le16(max_tx_time);
 	rp->status = 0x00;
 }
 #endif /* CONFIG_BT_CTLR_DATA_LENGTH */
@@ -2658,17 +2682,13 @@ static void le_adv_ext_report(struct pdu_data *pdu_data,
 		}
 
 		if (h->adv_addr) {
-			char addr_str[BT_ADDR_LE_STR_LEN];
 			bt_addr_le_t addr;
 
 			addr.type = adv->tx_addr;
 			memcpy(&addr.a.val[0], ptr, sizeof(bt_addr_t));
 			ptr += BDADDR_SIZE;
 
-			bt_addr_le_to_str(&addr, addr_str, sizeof(addr_str));
-
-			BT_DBG("AdvA: %s", addr_str);
-
+			BT_DBG("AdvA: %s", bt_addr_le_str(&addr));
 		}
 
 		if (h->tx_pwr) {
@@ -2715,7 +2735,6 @@ static void le_scan_req_received(struct pdu_data *pdu_data,
 
 	if (!(event_mask & BT_EVT_MASK_LE_META_EVENT) ||
 	    !(le_event_mask & BT_EVT_MASK_LE_SCAN_REQ_RECEIVED)) {
-		char addr_str[BT_ADDR_LE_STR_LEN];
 		bt_addr_le_t addr;
 		u8_t handle;
 #if !defined(CONFIG_BT_LL_SW_SPLIT)
@@ -2736,10 +2755,8 @@ static void le_scan_req_received(struct pdu_data *pdu_data,
 		rssi = -(*extra);
 #endif /* CONFIG_BT_LL_SW_SPLIT */
 
-		bt_addr_le_to_str(&addr, addr_str, sizeof(addr_str));
-
 		BT_DBG("handle: %d, addr: %s, rssi: %d dB.",
-		       handle, addr_str, rssi);
+		       handle, bt_addr_le_str(&addr), rssi);
 
 		return;
 	}
@@ -2992,6 +3009,14 @@ static void mesh_adv_cplt(struct pdu_data *pdu_data,
 }
 #endif /* CONFIG_BT_HCI_MESH_EXT */
 
+/**
+ * @brief Encode a control-PDU into an HCI buffer
+ * @details Execution context: Host thread
+ *
+ * @param node_rx_pdu[in] RX node containing header and PDU
+ * @param pdu_data[in]    PDU. Same as node_rx_pdu->pdu, but more convenient
+ * @param net_buf[out]    Upwards-going HCI buffer to fill
+ */
 static void encode_control(struct node_rx_pdu *node_rx,
 			   struct pdu_data *pdu_data, struct net_buf *buf)
 {
@@ -3101,6 +3126,12 @@ static void encode_control(struct node_rx_pdu *node_rx,
 		return;
 #endif /* CONFIG_BT_HCI_MESH_EXT */
 
+#if defined(CONFIG_BT_CTLR_USER_EXT)
+	case NODE_RX_TYPE_USER_START ... NODE_RX_TYPE_USER_END:
+		hci_user_ext_encode_control(node_rx, pdu_data, buf);
+		return;
+#endif /* CONFIG_BT_CTLR_USER_EXT */
+
 	default:
 		LL_ASSERT(0);
 		return;
@@ -3182,27 +3213,6 @@ static void le_unknown_rsp(struct pdu_data *pdu_data, u16_t handle,
 	}
 }
 
-static void remote_version_info(struct pdu_data *pdu_data, u16_t handle,
-				struct net_buf *buf)
-{
-	struct pdu_data_llctrl_version_ind *ver_ind;
-	struct bt_hci_evt_remote_version_info *ep;
-
-	if (!(event_mask & BT_EVT_MASK_REMOTE_VERSION_INFO)) {
-		return;
-	}
-
-	hci_evt_create(buf, BT_HCI_EVT_REMOTE_VERSION_INFO, sizeof(*ep));
-	ep = net_buf_add(buf, sizeof(*ep));
-
-	ver_ind = &pdu_data->llctrl.version_ind;
-	ep->status = 0x00;
-	ep->handle = sys_cpu_to_le16(handle);
-	ep->version = ver_ind->version_number;
-	ep->manufacturer = ver_ind->company_id;
-	ep->subversion = ver_ind->sub_version_number;
-}
-
 #if defined(CONFIG_BT_CTLR_CONN_PARAM_REQ)
 static void le_conn_param_req(struct pdu_data *pdu_data, u16_t handle,
 			      struct net_buf *buf)
@@ -3270,10 +3280,6 @@ static void encode_data_ctrl(struct node_rx_pdu *node_rx,
 		le_remote_feat_complete(0x00, pdu_data, handle, buf);
 		break;
 
-	case PDU_DATA_LLCTRL_TYPE_VERSION_IND:
-		remote_version_info(pdu_data, handle, buf);
-		break;
-
 #if defined(CONFIG_BT_CTLR_LE_ENC)
 	case PDU_DATA_LLCTRL_TYPE_REJECT_IND:
 		encrypt_change(pdu_data->llctrl.reject_ind.error_code, handle,
@@ -3307,19 +3313,13 @@ static void encode_data_ctrl(struct node_rx_pdu *node_rx,
 #if defined(CONFIG_BT_CONN)
 void hci_acl_encode(struct node_rx_pdu *node_rx, struct net_buf *buf)
 {
+	struct pdu_data *pdu_data = PDU_DATA(node_rx);
 	struct bt_hci_acl_hdr *acl;
-	struct pdu_data *pdu_data;
 	u16_t handle_flags;
 	u16_t handle;
 	u8_t *data;
 
 	handle = node_rx->hdr.handle;
-
-#if defined(CONFIG_BT_LL_SW_SPLIT)
-	pdu_data = (void *)node_rx->pdu;
-#else
-	pdu_data = (void *)((struct radio_pdu_node_rx *)node_rx)->pdu_data;
-#endif /* CONFIG_BT_LL_SW_SPLIT */
 
 	switch (pdu_data->ll_id) {
 	case PDU_DATA_LLID_DATA_CONTINUE:
@@ -3352,27 +3352,21 @@ void hci_acl_encode(struct node_rx_pdu *node_rx, struct net_buf *buf)
 		LL_ASSERT(0);
 		break;
 	}
-
 }
-#endif
+#endif /* CONFIG_BT_CONN */
 
 void hci_evt_encode(struct node_rx_pdu *node_rx, struct net_buf *buf)
 {
-	struct pdu_data *pdu_data;
-
-#if defined(CONFIG_BT_LL_SW_SPLIT)
-	pdu_data = (void *)node_rx->pdu;
-#else
-	pdu_data = (void *)((struct radio_pdu_node_rx *)node_rx)->pdu_data;
-#endif /* CONFIG_BT_LL_SW_SPLIT */
+	struct pdu_data *pdu_data = PDU_DATA(node_rx);
 
 	if (node_rx->hdr.type != NODE_RX_TYPE_DC_PDU) {
 		encode_control(node_rx, pdu_data, buf);
-	} else {
+	} else if (IS_ENABLED(CONFIG_BT_CONN)) {
 		encode_data_ctrl(node_rx, pdu_data, buf);
 	}
 }
 
+#if defined(CONFIG_BT_CONN)
 void hci_num_cmplt_encode(struct net_buf *buf, u16_t handle, u8_t num)
 {
 	struct bt_hci_evt_num_completed_packets *ep;
@@ -3392,15 +3386,35 @@ void hci_num_cmplt_encode(struct net_buf *buf, u16_t handle, u8_t num)
 	hc->count = sys_cpu_to_le16(num);
 }
 
-s8_t hci_get_class(struct node_rx_pdu *node_rx)
+#if defined(CONFIG_BT_REMOTE_VERSION)
+void hci_remote_version_info_encode(struct net_buf *buf,
+				    struct pdu_data *pdu_data, u16_t handle)
 {
-	struct pdu_data *pdu_data;
+	struct pdu_data_llctrl_version_ind *ver_ind;
+	struct bt_hci_evt_remote_version_info *ep;
 
-#if defined(CONFIG_BT_LL_SW_SPLIT)
-	pdu_data = (void *)node_rx->pdu;
-#else
-	pdu_data = (void *)((struct radio_pdu_node_rx *)node_rx)->pdu_data;
-#endif /* CONFIG_BT_LL_SW_SPLIT */
+	if (!(event_mask & BT_EVT_MASK_REMOTE_VERSION_INFO)) {
+		return;
+	}
+
+	hci_evt_create(buf, BT_HCI_EVT_REMOTE_VERSION_INFO, sizeof(*ep));
+	ep = net_buf_add(buf, sizeof(*ep));
+
+	ver_ind = &pdu_data->llctrl.version_ind;
+	ep->status = 0x00;
+	ep->handle = sys_cpu_to_le16(handle);
+	ep->version = ver_ind->version_number;
+	ep->manufacturer = ver_ind->company_id;
+	ep->subversion = ver_ind->sub_version_number;
+}
+#endif /* CONFIG_BT_REMOTE_VERSION */
+#endif /* CONFIG_BT_CONN */
+
+u8_t hci_get_class(struct node_rx_pdu *node_rx)
+{
+#if defined(CONFIG_BT_CONN)
+	struct pdu_data *pdu_data = PDU_DATA(node_rx);
+#endif
 
 	if (node_rx->hdr.type != NODE_RX_TYPE_DC_PDU) {
 
@@ -3469,15 +3483,26 @@ s8_t hci_get_class(struct node_rx_pdu *node_rx)
 			return HCI_CLASS_EVT_CONNECTION;
 #endif /* CONFIG_BT_CONN */
 
+#if defined(CONFIG_BT_CTLR_USER_EXT)
+		case NODE_RX_TYPE_USER_START ... NODE_RX_TYPE_USER_END:
+			return hci_user_ext_get_class(node_rx);
+#endif /* CONFIG_BT_CTLR_USER_EXT */
+
 		default:
-			return -1;
+			return HCI_CLASS_NONE;
 		}
 
+#if defined(CONFIG_BT_CONN)
 	} else if (pdu_data->ll_id == PDU_DATA_LLID_CTRL) {
-		return HCI_CLASS_EVT_CONNECTION;
+		return HCI_CLASS_EVT_LLCP;
 	} else {
 		return HCI_CLASS_ACL_DATA;
 	}
+#else
+	} else {
+		return HCI_CLASS_NONE;
+	}
+#endif
 }
 
 void hci_init(struct k_poll_signal *signal_host_buf)

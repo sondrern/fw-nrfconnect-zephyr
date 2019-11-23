@@ -121,6 +121,8 @@ A board implements an SoC with all its features, together with peripherals
 available on the board that differentiates the board with additional interfaces
 and features not available in the SoC.
 
+.. _default_board_configuration:
+
 Default board configuration
 ***************************
 
@@ -247,7 +249,7 @@ works like ``if y`` (is always satisfied).
 .. note::
 
     ``range`` properties on ``int`` and ``hex`` symbols work the same way, and
-    can also be added or overriden in :file:`Kconfig.defconfig` files.
+    can also be added or overridden in :file:`Kconfig.defconfig` files.
 
 If you want a symbol to only be user-configurable on some boards, make its base
 definition have no prompt, and then add a prompt to it in the

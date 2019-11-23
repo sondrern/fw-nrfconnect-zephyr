@@ -5,17 +5,15 @@
  */
 
 #include <device.h>
-#include <i2c.h>
-#include <misc/__assert.h>
-#include <misc/util.h>
+#include <drivers/i2c.h>
+#include <sys/__assert.h>
+#include <sys/util.h>
 #include <kernel.h>
-#include <sensor.h>
-
+#include <drivers/sensor.h>
+#include <logging/log.h>
 #include "lis3mdl.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-#include <logging/log.h>
-LOG_MODULE_DECLARE(LIS3MDL);
+LOG_MODULE_DECLARE(LIS3MDL, CONFIG_SENSOR_LOG_LEVEL);
 
 int lis3mdl_trigger_set(struct device *dev,
 			const struct sensor_trigger *trig,
@@ -126,7 +124,7 @@ int lis3mdl_init_interrupt(struct device *dev)
 	}
 
 	/* enable interrupt */
-	if (i2c_reg_write_byte(drv_data->i2c, DT_ST_LIS3MDL_MAGN_0_BASE_ADDRESS,
+	if (i2c_reg_write_byte(drv_data->i2c, DT_INST_0_ST_LIS3MDL_MAGN_BASE_ADDRESS,
 			       LIS3MDL_REG_INT_CFG, LIS3MDL_INT_XYZ_EN) < 0) {
 		LOG_DBG("Could not enable interrupt.");
 		return -EIO;
@@ -139,7 +137,7 @@ int lis3mdl_init_interrupt(struct device *dev)
 			CONFIG_LIS3MDL_THREAD_STACK_SIZE,
 			(k_thread_entry_t)lis3mdl_thread, POINTER_TO_INT(dev),
 			0, NULL, K_PRIO_COOP(CONFIG_LIS3MDL_THREAD_PRIORITY),
-			0, 0);
+			0, K_NO_WAIT);
 #elif defined(CONFIG_LIS3MDL_TRIGGER_GLOBAL_THREAD)
 	drv_data->work.handler = lis3mdl_work_cb;
 	drv_data->dev = dev;

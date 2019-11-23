@@ -11,7 +11,7 @@
 #include <zephyr.h>
 #include <ztest.h>
 
-#include <misc/printk.h>
+#include <sys/printk.h>
 #include <arch/cpu.h>
 #include <tc_util.h>
 #if defined(CONFIG_ARCH_POSIX)
@@ -186,7 +186,7 @@ void ticklessTestThread(void)
 #elif defined(CONFIG_ARCH_POSIX)
 	printk("diff  time stamp: %llu\n", diff_tsc);
 	printk("Cal   time stamp: %llu\n", cal_tsc);
-#elif defined(CONFIG_ARM) || defined(CONFIG_SOC_QUARK_SE_C1000_SS)
+#elif defined(CONFIG_ARM)
 	printk("diff  time stamp: 0x%x\n", diff_tsc);
 	printk("Cal   time stamp: 0x%x\n", cal_tsc);
 #endif
@@ -231,7 +231,7 @@ void test_tickless(void)
 			(k_thread_entry_t) ticklessTestThread,
 			NULL, NULL, NULL,
 			PRIORITY, 0, K_NO_WAIT);
-	k_sleep(4000);
+	k_sleep(K_MSEC(4000));
 }
 
 /**

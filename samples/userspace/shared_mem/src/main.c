@@ -8,7 +8,7 @@
  *
  *  Basic example of userspace thread protected memory
  *
- *  NOTE: The encryption algorithim is unverified and
+ *  NOTE: The encryption algorithm is unverified and
  *  based on a 1930's erra piece of hardware.
  *  DO NOT USE THIS CODE FOR SECURITY
  *
@@ -207,7 +207,7 @@ void enc(void)
 			}
 			/* test for CT flag */
 			while (fBUFOUT != 0) {
-				k_sleep(100);
+				k_sleep(K_MSEC(100));
 			}
 			/* ct thread has cleared the buffer */
 			memcpy(&BUFOUT, &enc_ct, SAMP_BLOCKSIZE);
@@ -226,7 +226,7 @@ void enc(void)
 void pt(void)
 {
 
-	k_sleep(2000);
+	k_sleep(K_MSEC(2000));
 	while (1) {
 		k_sem_take(&allforone, K_FOREVER);
 		if (fBUFIN == 0) { /* send message to encode */
@@ -245,7 +245,7 @@ void pt(void)
 			fBUFIN = 1;
 		}
 		k_sem_give(&allforone);
-		k_sleep(5000);
+		k_sleep(K_MSEC(5000));
 	}
 }
 

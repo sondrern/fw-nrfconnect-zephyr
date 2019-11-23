@@ -36,9 +36,9 @@
 #include <init.h>
 #include <errno.h>
 #include <string.h>
-#include <misc/byteorder.h>
-#include <misc/__assert.h>
-#include <disk_access.h>
+#include <sys/byteorder.h>
+#include <sys/__assert.h>
+#include <disk/disk_access.h>
 #include <usb/class/usb_msc.h>
 #include <usb/usb_device.h>
 #include <usb/usb_common.h>
@@ -854,7 +854,7 @@ static void mass_interface_config(struct usb_desc_header *head,
 }
 
 /* Configuration of the Mass Storage Device send to the USB Driver */
-USBD_CFG_DATA_DEFINE(msd) struct usb_cfg_data mass_storage_config = {
+USBD_CFG_DATA_DEFINE(primary, msd) struct usb_cfg_data mass_storage_config = {
 	.usb_device_description = NULL,
 	.interface_config = mass_interface_config,
 	.interface_descriptor = &mass_cfg.if0,
@@ -955,7 +955,7 @@ static int mass_storage_init(struct device *dev)
 	k_thread_create(&mass_thread_data, mass_thread_stack,
 			DISK_THREAD_STACK_SZ,
 			(k_thread_entry_t)mass_thread_main, NULL, NULL, NULL,
-			DISK_THREAD_PRIO, 0, 0);
+			DISK_THREAD_PRIO, 0, K_NO_WAIT);
 
 	return 0;
 }

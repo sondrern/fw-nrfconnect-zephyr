@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <gpio.h>
-#include <uart.h>
+#include <drivers/gpio.h>
+#include <drivers/uart.h>
 #include <device.h>
 
 #define RESET_PIN CONFIG_BOARD_NRF52840_GPIO_RESET_PIN
@@ -55,7 +55,7 @@ int bt_hci_transport_setup(struct device *h4)
 	 * It is critical (!) to wait here, so that all bytes
 	 * on the lines are received and drained correctly.
 	 */
-	k_sleep(1);
+	k_sleep(K_MSEC(10));
 
 	/* Drain bytes */
 	while (uart_fifo_read(h4, &c, 1)) {

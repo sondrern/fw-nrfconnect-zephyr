@@ -6,7 +6,7 @@
  */
 
 #include <zephyr.h>
-#include <flash_map.h>
+#include <storage/flash_map.h>
 
 /**
  * Have flash_map_default use Partition Manager information instead of

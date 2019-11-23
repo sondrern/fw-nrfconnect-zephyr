@@ -6,6 +6,7 @@
 
 /dts-v1/;
 #include <st/f1/stm32f103Xb.dtsi>
+#include "arduino_r3_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32F103RB-NUCLEO board";
@@ -50,7 +51,7 @@
 	current-speed = <115200>;
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-names = "default";
-	status = "ok";
+	status = "okay";
 };
 
 &usart3 {
@@ -59,26 +60,26 @@
 	pinctrl-names = "default";
 };
 
-arduino_spi: &spi1 {
-      status = "ok";
+&spi1 {
+	status = "okay";
 };
 
 &spi2 {
-      status = "ok";
+      status = "okay";
 };
 
 &timers1 {
-	status = "ok";
+	status = "okay";
 
 	pwm {
-		status = "ok";
+		status = "okay";
 	};
 };
 
 &iwdg {
-	status = "ok";
+	status = "okay";
 };
 
 &adc1 {
-	status = "ok";
+	status = "okay";
 };

@@ -6,8 +6,8 @@
 
 #include <kernel.h>
 #include <device.h>
-#include <spi.h>
-#include <gpio.h>
+#include <drivers/spi.h>
+#include <drivers/gpio.h>
 
 #define LOG_LEVEL CONFIG_CAN_LOG_LEVEL
 #include <logging/log.h>
@@ -193,8 +193,7 @@ static int mcp2515_configure(struct device *dev, enum can_mode mode,
 				dev_cfg->tq_bs2;
 
 	/* CNF1; SJW<7:6> | BRP<5:0> */
-	u8_t brp =
-		(CONFIG_CAN_MCP2515_OSC_FREQ / (bit_length * bitrate * 2)) - 1;
+	u8_t brp = (dev_cfg->osc_freq / (bit_length * bitrate * 2)) - 1;
 	const u8_t sjw = (dev_cfg->tq_sjw - 1) << 6;
 	u8_t cnf1 = sjw | brp;
 
@@ -238,12 +237,12 @@ static int mcp2515_configure(struct device *dev, enum can_mode mode,
 		 "PROP + BS1 >= BS2");
 	__ASSERT(dev_cfg->tq_bs2 > dev_cfg->tq_sjw, "BS2 > SJW");
 
-	if (CONFIG_CAN_MCP2515_OSC_FREQ % (bit_length * bitrate * 2)) {
+	if (dev_cfg->osc_freq % (bit_length * bitrate * 2)) {
 		LOG_ERR("Prescaler is not a natural number! "
 			"prescaler = osc_rate / ((PROP + SEG1 + SEG2 + 1) "
 			"* bitrate * 2)\n"
 			"prescaler = %d / ((%d + %d + %d + 1) * %d * 2)",
-			CONFIG_CAN_MCP2515_OSC_FREQ, dev_cfg->tq_prop,
+			dev_cfg->osc_freq, dev_cfg->tq_prop,
 			dev_cfg->tq_bs1, dev_cfg->tq_bs2, bitrate);
 	}
 
@@ -461,11 +460,11 @@ static void mcp2515_handle_interrupts(struct device *dev)
 			mcp2515_tx_done(dev, 0);
 		}
 
-		if (canintf & MCP2515_CANINTF_TX0IF) {
+		if (canintf & MCP2515_CANINTF_TX1IF) {
 			mcp2515_tx_done(dev, 1);
 		}
 
-		if (canintf & MCP2515_CANINTF_TX0IF) {
+		if (canintf & MCP2515_CANINTF_TX2IF) {
 			mcp2515_tx_done(dev, 2);
 		}
 
@@ -531,7 +530,7 @@ static int mcp2515_init(struct device *dev)
 		return -EINVAL;
 	}
 
-#ifdef DT_MICROCHIP_MCP2515_0_CS_GPIO_PIN
+#ifdef DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_PIN
 	dev_data->spi_cs_ctrl.gpio_dev =
 		device_get_binding(dev_cfg->spi_cs_port);
 	if (!dev_data->spi_cs_ctrl.gpio_dev) {
@@ -545,7 +544,7 @@ static int mcp2515_init(struct device *dev)
 	dev_data->spi_cfg.cs = &dev_data->spi_cs_ctrl;
 #else
 	dev_data->spi_cfg.cs = NULL;
-#endif  /* DT_MICROCHIP_MCP2515_0_CS_GPIO_PIN */
+#endif  /* DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_PIN */
 
 	/* Reset MCP2515 */
 	if (mcp2515_cmd_soft_reset(dev)) {
@@ -607,25 +606,26 @@ static struct mcp2515_data mcp2515_data_1 = {
 };
 
 static const struct mcp2515_config mcp2515_config_1 = {
-	.spi_port = DT_MICROCHIP_MCP2515_0_BUS_NAME,
-	.spi_freq = DT_MICROCHIP_MCP2515_0_SPI_MAX_FREQUENCY,
-	.spi_slave = DT_MICROCHIP_MCP2515_0_BASE_ADDRESS,
-	.int_pin = DT_MICROCHIP_MCP2515_0_INT_GPIOS_PIN,
-	.int_port = DT_MICROCHIP_MCP2515_0_INT_GPIOS_CONTROLLER,
+	.spi_port = DT_INST_0_MICROCHIP_MCP2515_BUS_NAME,
+	.spi_freq = DT_INST_0_MICROCHIP_MCP2515_SPI_MAX_FREQUENCY,
+	.spi_slave = DT_INST_0_MICROCHIP_MCP2515_BASE_ADDRESS,
+	.int_pin = DT_INST_0_MICROCHIP_MCP2515_INT_GPIOS_PIN,
+	.int_port = DT_INST_0_MICROCHIP_MCP2515_INT_GPIOS_CONTROLLER,
 	.int_thread_stack_size = CONFIG_CAN_MCP2515_INT_THREAD_STACK_SIZE,
 	.int_thread_priority = CONFIG_CAN_MCP2515_INT_THREAD_PRIO,
-#ifdef DT_MICROCHIP_MCP2515_0_CS_GPIO_PIN
-	.spi_cs_pin = DT_MICROCHIP_MCP2515_0_CS_GPIO_PIN,
-	.spi_cs_port = DT_MICROCHIP_MCP2515_0_CS_GPIO_CONTROLLER,
-#endif  /* DT_MICROCHIP_MCP2515_0_CS_GPIO_PIN */
-	.tq_sjw = CONFIG_CAN_SJW,
-	.tq_prop = CONFIG_CAN_PROP_SEG,
-	.tq_bs1 = CONFIG_CAN_PHASE_SEG1,
-	.tq_bs2 = CONFIG_CAN_PHASE_SEG2,
-	.bus_speed = DT_MICROCHIP_MCP2515_0_BUS_SPEED,
+#ifdef DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_PIN
+	.spi_cs_pin = DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_PIN,
+	.spi_cs_port = DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_CONTROLLER,
+#endif  /* DT_INST_0_MICROCHIP_MCP2515_CS_GPIOS_PIN */
+	.tq_sjw = DT_INST_0_MICROCHIP_MCP2515_SJW,
+	.tq_prop = DT_INST_0_MICROCHIP_MCP2515_PROP_SEG,
+	.tq_bs1 = DT_INST_0_MICROCHIP_MCP2515_PHASE_SEG1,
+	.tq_bs2 = DT_INST_0_MICROCHIP_MCP2515_PHASE_SEG2,
+	.bus_speed = DT_INST_0_MICROCHIP_MCP2515_BUS_SPEED,
+	.osc_freq = DT_INST_0_MICROCHIP_MCP2515_OSC_FREQ
 };
 
-DEVICE_AND_API_INIT(can_mcp2515_1, DT_MICROCHIP_MCP2515_0_LABEL, &mcp2515_init,
+DEVICE_AND_API_INIT(can_mcp2515_1, DT_INST_0_MICROCHIP_MCP2515_LABEL, &mcp2515_init,
 		    &mcp2515_data_1, &mcp2515_config_1, POST_KERNEL,
 		    CONFIG_CAN_MCP2515_INIT_PRIORITY, &can_api_funcs);
 

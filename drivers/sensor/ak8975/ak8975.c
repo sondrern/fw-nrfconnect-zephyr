@@ -5,18 +5,17 @@
  */
 
 #include <device.h>
-#include <i2c.h>
+#include <drivers/i2c.h>
 #include <kernel.h>
-#include <sensor.h>
-#include <misc/__assert.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
 #include <logging/log.h>
 
 #include "ak8975.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(AK8975);
+LOG_MODULE_REGISTER(AK8975, CONFIG_SENSOR_LOG_LEVEL);
 
 static int ak8975_sample_fetch(struct device *dev, enum sensor_channel chan)
 {

@@ -9,8 +9,8 @@
 #include <display/cfb.h>
 #include <stdio.h>
 
-#if defined(CONFIG_SSD1673)
-#define DISPLAY_DRIVER		"SSD1673"
+#if defined(CONFIG_SSD16XX)
+#define DISPLAY_DRIVER		"SSD16XX"
 #endif
 
 #if defined(CONFIG_SSD1306)
@@ -83,7 +83,7 @@ void main(void)
 
 			cfb_framebuffer_finalize(dev);
 #if defined(CONFIG_ARCH_POSIX)
-			k_sleep(100);
+			k_sleep(K_MSEC(100));
 #endif
 		}
 	}

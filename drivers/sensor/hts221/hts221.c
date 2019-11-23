@@ -4,18 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <i2c.h>
+#include <drivers/i2c.h>
 #include <init.h>
-#include <misc/__assert.h>
-#include <misc/byteorder.h>
-#include <sensor.h>
+#include <sys/__assert.h>
+#include <sys/byteorder.h>
+#include <drivers/sensor.h>
 #include <string.h>
 #include <logging/log.h>
 
 #include "hts221.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(HTS221);
+LOG_MODULE_REGISTER(HTS221, CONFIG_SENSOR_LOG_LEVEL);
 
 static const char * const hts221_odr_strings[] = {
 	"1", "7", "12.5"
@@ -66,7 +65,7 @@ static int hts221_sample_fetch(struct device *dev, enum sensor_channel chan)
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
 
-	if (i2c_burst_read(drv_data->i2c, DT_ST_HTS221_0_BASE_ADDRESS,
+	if (i2c_burst_read(drv_data->i2c, DT_INST_0_ST_HTS221_BASE_ADDRESS,
 			   HTS221_REG_DATA_START | HTS221_AUTOINCREMENT_ADDR,
 			   buf, 4) < 0) {
 		LOG_ERR("Failed to fetch data sample.");
@@ -83,7 +82,7 @@ static int hts221_read_conversion_data(struct hts221_data *drv_data)
 {
 	u8_t buf[16];
 
-	if (i2c_burst_read(drv_data->i2c, DT_ST_HTS221_0_BASE_ADDRESS,
+	if (i2c_burst_read(drv_data->i2c, DT_INST_0_ST_HTS221_BASE_ADDRESS,
 			   HTS221_REG_CONVERSION_START |
 			   HTS221_AUTOINCREMENT_ADDR, buf, 16) < 0) {
 		LOG_ERR("Failed to read conversion data.");
@@ -115,15 +114,15 @@ int hts221_init(struct device *dev)
 	struct hts221_data *drv_data = dev->driver_data;
 	u8_t id, idx;
 
-	drv_data->i2c = device_get_binding(DT_ST_HTS221_0_BUS_NAME);
+	drv_data->i2c = device_get_binding(DT_INST_0_ST_HTS221_BUS_NAME);
 	if (drv_data->i2c == NULL) {
 		LOG_ERR("Could not get pointer to %s device.",
-			    DT_ST_HTS221_0_BUS_NAME);
+			    DT_INST_0_ST_HTS221_BUS_NAME);
 		return -EINVAL;
 	}
 
 	/* check chip ID */
-	if (i2c_reg_read_byte(drv_data->i2c, DT_ST_HTS221_0_BASE_ADDRESS,
+	if (i2c_reg_read_byte(drv_data->i2c, DT_INST_0_ST_HTS221_BASE_ADDRESS,
 			      HTS221_REG_WHO_AM_I, &id) < 0) {
 		LOG_ERR("Failed to read chip ID.");
 		return -EIO;
@@ -146,7 +145,7 @@ int hts221_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	if (i2c_reg_write_byte(drv_data->i2c, DT_ST_HTS221_0_BASE_ADDRESS,
+	if (i2c_reg_write_byte(drv_data->i2c, DT_INST_0_ST_HTS221_BASE_ADDRESS,
 			       HTS221_REG_CTRL1,
 			       (idx + 1) << HTS221_ODR_SHIFT | HTS221_BDU_BIT |
 			       HTS221_PD_BIT) < 0) {
@@ -158,7 +157,7 @@ int hts221_init(struct device *dev)
 	 * the device requires about 2.2 ms to download the flash content
 	 * into the volatile mem
 	 */
-	k_sleep(3);
+	k_sleep(K_MSEC(3));
 
 	if (hts221_read_conversion_data(drv_data) < 0) {
 		LOG_ERR("Failed to read conversion data.");
@@ -177,6 +176,6 @@ int hts221_init(struct device *dev)
 
 struct hts221_data hts221_driver;
 
-DEVICE_AND_API_INIT(hts221, DT_ST_HTS221_0_LABEL, hts221_init, &hts221_driver,
+DEVICE_AND_API_INIT(hts221, DT_INST_0_ST_HTS221_LABEL, hts221_init, &hts221_driver,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &hts221_driver_api);

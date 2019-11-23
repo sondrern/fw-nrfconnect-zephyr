@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <i2c.h>
+#include <drivers/i2c.h>
 #include <init.h>
-#include <misc/byteorder.h>
-#include <sensor.h>
+#include <sys/byteorder.h>
+#include <drivers/sensor.h>
 #include <logging/log.h>
 
 #include "mpu6050.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(MPU6050);
+LOG_MODULE_REGISTER(MPU6050, CONFIG_SENSOR_LOG_LEVEL);
 
 /* see "Accelerometer Measurements" section from register map description */
 static void mpu6050_convert_accel(struct sensor_value *val, s16_t raw_val,

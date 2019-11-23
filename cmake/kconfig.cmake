@@ -22,9 +22,15 @@ if(${IMAGE}CONF_FILE)
 string(REPLACE " " ";" ${IMAGE}CONF_FILE_AS_LIST "${${IMAGE}CONF_FILE}")
 endif()
 
-if(OVERLAY_CONFIG)
-  string(REPLACE " " ";" OVERLAY_CONFIG_AS_LIST "${OVERLAY_CONFIG}")
+if(${IMAGE}OVERLAY_CONFIG)
+  string(REPLACE " " ";" ${IMAGE}OVERLAY_CONFIG_AS_LIST "${${IMAGE}OVERLAY_CONFIG}")
 endif()
+
+# DTS_ROOT_BINDINGS is a semicolon separated list, this causes
+# problems when invoking kconfig_target since semicolon is a special
+# character in the C shell, so we make it into a question-mark
+# separated list instead.
+string(REPLACE ";" "?" DTS_ROOT_BINDINGS "${DTS_ROOT_BINDINGS}")
 
 set(ENV{srctree}            ${ZEPHYR_BASE})
 set(ENV{KERNELVERSION}      ${KERNELVERSION})
@@ -39,6 +45,8 @@ set(ENV{SOC_DIR}   ${SOC_DIR})
 set(ENV{CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR})
 set(ENV{ARCH_DIR}   ${ARCH_DIR})
 set(ENV{GENERATED_DTS_BOARD_CONF} ${GENERATED_DTS_BOARD_CONF})
+set(ENV{DTS_POST_CPP} ${DTS_POST_CPP})
+set(ENV{DTS_ROOT_BINDINGS} "${DTS_ROOT_BINDINGS}")
 
 # Allow out-of-tree users to add their own Kconfig python frontend
 # targets by appending targets to the CMake list
@@ -77,6 +85,8 @@ foreach(kconfig_target
     ZEPHYR_TOOLCHAIN_VARIANT=${ZEPHYR_TOOLCHAIN_VARIANT}
     ARCH_DIR=$ENV{ARCH_DIR}
     GENERATED_DTS_BOARD_CONF=${GENERATED_DTS_BOARD_CONF}
+    DTS_POST_CPP=${DTS_POST_CPP}
+    DTS_ROOT_BINDINGS=${DTS_ROOT_BINDINGS}
     ${PYTHON_EXECUTABLE}
     ${EXTRA_KCONFIG_TARGET_COMMAND_FOR_${kconfig_target}}
     ${KCONFIG_ROOT}
@@ -91,16 +101,33 @@ endforeach()
 # user-testing.
 unset(EXTRA_KCONFIG_OPTIONS)
 get_cmake_property(cache_variable_names CACHE_VARIABLES)
+
+if ("${IMAGE}" STREQUAL "")
+  foreach (name ${cache_variable_names})
+    if("${name}" MATCHES "^CONFIG_")
+      set(app_${name} ${${name}} CACHE STRING "")
+      unset(${name} CACHE)
+    endif()
+  endforeach()
+  set(KCONFIG_CACHE_IMAGE_PREFIX app_)
+else()
+  set(KCONFIG_CACHE_IMAGE_PREFIX ${IMAGE})
+endif()
+
+get_cmake_property(cache_variable_names CACHE_VARIABLES)
+
 foreach (name ${cache_variable_names})
-  if("${name}" MATCHES "^CONFIG_")
-    # When a cache variable starts with 'CONFIG_', it is assumed to be
-    # a CLI Kconfig symbol assignment.
+  if("${name}" MATCHES "^${KCONFIG_CACHE_IMAGE_PREFIX}CONFIG_")
+    # When a cache variable starts with '<image_name_>CONFIG_', it is assumed to be
+    # a Kconfig symbol assignment from the CMake command line.
+    string(REPLACE "${KCONFIG_CACHE_IMAGE_PREFIX}" "" config_name ${name})
     set(EXTRA_KCONFIG_OPTIONS
-      "${EXTRA_KCONFIG_OPTIONS}\n${name}=${${name}}"
+      "${EXTRA_KCONFIG_OPTIONS}\n${config_name}=${${name}}"
       )
   endif()
 endforeach()
 
+unset(EXTRA_KCONFIG_OPTIONS_FILE)
 if(EXTRA_KCONFIG_OPTIONS)
   set(EXTRA_KCONFIG_OPTIONS_FILE ${PROJECT_BINARY_DIR}/misc/generated/extra_kconfig_options.conf)
   file(WRITE
@@ -118,7 +145,7 @@ set(
   ${BOARD_DEFCONFIG}
   ${${IMAGE}CONF_FILE_AS_LIST}
   ${shield_conf_files}
-  ${OVERLAY_CONFIG_AS_LIST}
+  ${${IMAGE}OVERLAY_CONFIG_AS_LIST}
   ${EXTRA_KCONFIG_OPTIONS_FILE}
   ${config_files}
 )
@@ -214,24 +241,15 @@ endforeach()
 
 add_custom_target(${IMAGE}config-sanitycheck DEPENDS ${DOTCONFIG})
 
-# Remove the CLI Kconfig symbols from the namespace and
-# CMakeCache.txt. If the symbols end up in DOTCONFIG they will be
-# re-introduced to the namespace through 'import_kconfig'.
-foreach (name ${cache_variable_names})
-  if("${name}" MATCHES "^CONFIG_")
-    unset(${name})
-    unset(${name} CACHE)
-  endif()
-endforeach()
-
 # Parse the lines prefixed with CONFIG_ in the .config file from Kconfig
 import_kconfig(CONFIG_ ${DOTCONFIG})
 
-# Re-introduce the CLI Kconfig symbols that survived
+# Clear CLI Kconfig symbols that were not set.
 foreach (name ${cache_variable_names})
-  if("${name}" MATCHES "^CONFIG_")
-    if(DEFINED ${name})
-      set(${name} ${${name}} CACHE STRING "")
+  if("${name}" MATCHES "^${KCONFIG_CACHE_IMAGE_PREFIX}CONFIG_")
+    string(REPLACE "${KCONFIG_CACHE_IMAGE_PREFIX}" "" config_name ${name})
+    if(NOT DEFINED ${config_name})
+      unset(${name} CACHE)
     endif()
   endif()
 endforeach()

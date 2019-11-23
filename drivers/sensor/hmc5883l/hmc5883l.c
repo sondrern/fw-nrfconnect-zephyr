@@ -4,18 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <i2c.h>
+#include <drivers/i2c.h>
 #include <init.h>
-#include <misc/__assert.h>
-#include <misc/byteorder.h>
-#include <sensor.h>
+#include <sys/__assert.h>
+#include <sys/byteorder.h>
+#include <drivers/sensor.h>
 #include <string.h>
 #include <logging/log.h>
 
 #include "hmc5883l.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(HMC5883L);
+LOG_MODULE_REGISTER(HMC5883L, CONFIG_SENSOR_LOG_LEVEL);
 
 static void hmc5883l_convert(struct sensor_value *val, s16_t raw_val,
 			     u16_t divider)

@@ -5,11 +5,11 @@
  */
 
 #include <string.h>
-#include <dma.h>
-#include <i2s.h>
+#include <drivers/dma.h>
+#include <drivers/i2s.h>
 #include <soc.h>
 #include <clock_control/stm32_clock_control.h>
-#include <clock_control.h>
+#include <drivers/clock_control.h>
 
 #include "i2s_ll_stm32.h"
 #include <logging/log.h>
@@ -140,7 +140,7 @@ static int i2s_stm32_set_clock(struct device *dev, u32_t bit_clk_freq)
 		}
 
 		/* wait 1 ms */
-		k_sleep(1);
+		k_sleep(K_MSEC(1));
 	}
 	LOG_DBG("PLLI2S is locked");
 

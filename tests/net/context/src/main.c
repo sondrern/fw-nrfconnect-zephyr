@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(net_test, CONFIG_NET_CONTEXT_LOG_LEVEL);
 #include <stddef.h>
 #include <string.h>
 #include <errno.h>
-#include <misc/printk.h>
+#include <sys/printk.h>
 #include <linker/sections.h>
 
 #include <tc_util.h>
@@ -389,7 +389,9 @@ static void net_ctx_send_v6(void)
 	test_sending = true;
 
 	ret = net_context_send(udp_v6_ctx, test_data, strlen(test_data),
-			       send_cb, K_NO_WAIT, INT_TO_POINTER(AF_INET6));
+			       send_cb, K_FOREVER, INT_TO_POINTER(AF_INET6));
+	k_yield();
+
 	zassert_false(((ret < 0) || cb_failure),
 		     "Context send IPv6 UDP test failed");
 }
@@ -401,7 +403,9 @@ static void net_ctx_send_v4(void)
 	test_sending = true;
 
 	ret = net_context_send(udp_v4_ctx, test_data, strlen(test_data),
-			       send_cb, K_NO_WAIT, INT_TO_POINTER(AF_INET));
+			       send_cb, K_FOREVER, INT_TO_POINTER(AF_INET));
+	k_yield();
+
 	zassert_false(((ret < 0) || cb_failure),
 		      "Context send IPv4 UDP test failed");
 }
@@ -700,7 +704,7 @@ static k_tid_t start_timeout_v6_thread(s32_t timeout)
 			       (k_thread_entry_t)timeout_thread,
 			       udp_v6_ctx, INT_TO_POINTER(AF_INET6),
 			       INT_TO_POINTER(timeout),
-			       K_PRIO_COOP(7), 0, 0);
+			       K_PRIO_COOP(7), 0, K_NO_WAIT);
 }
 
 static k_tid_t start_timeout_v4_thread(s32_t timeout)
@@ -709,7 +713,7 @@ static k_tid_t start_timeout_v4_thread(s32_t timeout)
 			       (k_thread_entry_t)timeout_thread,
 			       udp_v4_ctx, INT_TO_POINTER(AF_INET),
 			       INT_TO_POINTER(timeout),
-			       K_PRIO_COOP(7), 0, 0);
+			       K_PRIO_COOP(7), 0, K_NO_WAIT);
 }
 
 static void net_ctx_recv_v6_timeout(void)

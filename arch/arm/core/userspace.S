@@ -7,11 +7,9 @@
  *
  */
 
-#include <offsets_short.h>
 #include <toolchain.h>
 #include <linker/sections.h>
-#include <kernel_structs.h>
-#include <arch/cpu.h>
+#include <offsets_short.h>
 #include <syscall.h>
 
 _ASM_FILE_PROLOGUE
@@ -35,6 +33,9 @@ GDATA(_k_syscall_table)
  * The conversion is one way, and threads which transition to user mode do
  * not transition back later, unless they are doing system calls.
  *
+ * The function is invoked as:
+ * z_arm_userspace_enter(user_entry, p1, p2, p3,
+ *                        stack_info.start, stack_info.size);
  */
 SECTION_FUNC(TEXT,z_arm_userspace_enter)
     /* move user_entry to lr */
@@ -46,14 +47,20 @@ SECTION_FUNC(TEXT,z_arm_userspace_enter)
     msr PSPLIM, r0
 #endif
 
-    /* set stack to privileged stack */
+    /* prepare to set stack to privileged stack */
     ldr r0, =_kernel
     ldr r0, [r0, #_kernel_offset_to_current]
     ldr r0, [r0, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
     ldr ip, =CONFIG_PRIVILEGED_STACK_SIZE
     add r0, r0, ip
 
+    /* store current stack pointer to ip
+     * the current stack pointer is needed to retrieve
+     * stack_info.start and stack_info.size
+     */
     mov ip, sp
+
+    /* set stack to privileged stack */
     msr PSP, r0
 
 #if defined(CONFIG_BUILTIN_STACK_GUARD)
@@ -64,11 +71,14 @@ SECTION_FUNC(TEXT,z_arm_userspace_enter)
     msr PSPLIM, r0
 #endif
 
-#if defined (CONFIG_ARM_MPU)
+    /* push args to stack */
+    push {r1,r2,r3,lr}
+    push {r0,ip}
+
     /* Re-program dynamic memory map.
      *
      * Important note:
-     * z_arch_configure_dynamic_mpu_regions() may re-program the MPU Stack Guard
+     * z_arm_configure_dynamic_mpu_regions() may re-program the MPU Stack Guard
      * to guard the privilege stack for overflows (if building with option
      * CONFIG_MPU_STACK_GUARD). There is a risk of actually overflowing the
      * stack while doing the re-programming. We minimize the risk by placing
@@ -79,24 +89,17 @@ SECTION_FUNC(TEXT,z_arm_userspace_enter)
      * stack, since we do not control how much stack is actually left, when
      * user invokes z_arm_userspace_enter().
      */
-    push {r0,r1,r2,r3,ip,lr}
     ldr r0, =_kernel
     ldr r0, [r0, #_kernel_offset_to_current]
-    bl z_arch_configure_dynamic_mpu_regions
-    pop {r0,r1,r2,r3,ip,lr}
-#endif
+    bl z_arm_configure_dynamic_mpu_regions
+
+    pop {r0,ip}
 
     /* load up stack info from user stack */
     ldr r0, [ip]
     ldr ip, [ip, #4]
 
-#ifdef CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT
-    /* Guard is taken out of size, so adjust beginning and size of stack */
-    subs ip, #MPU_GUARD_ALIGN_AND_SIZE
-#endif
-
-    /* push args to stack */
-    push {r0,r1,r2,r3,ip,lr}
+    push {r0,ip}
 
     /* clear the user stack area to clean out privileged data */
     /* from right past the guard right up to the end */
@@ -108,18 +111,18 @@ SECTION_FUNC(TEXT,z_arm_userspace_enter)
 #endif
     bl memset
 
-    pop {r0,r1,r2,r3,ip,lr}
+    pop {r0,ip}
 
     /* r0 contains user stack start, ip contains user stack size */
     add r0, r0, ip   /* calculate top of stack */
 
 #if defined(CONFIG_BUILTIN_STACK_GUARD)
     /* clear stack limit (stack protection not required in user mode) */
-    push {r3}
     mov r3, #0
     msr PSPLIM, r3
-    pop {r3}
 #endif
+    /* pop remaining arguments from stack before switching stacks */
+    pop {r1,r2,r3,lr}
 
     /* set stack to user stack */
     msr PSP, r0
@@ -178,6 +181,44 @@ SECTION_FUNC(TEXT,z_arm_userspace_enter)
  *
  */
 SECTION_FUNC(TEXT, z_arm_do_syscall)
+
+    /* The function is executing in privileged mode. This implies that we
+     * shall not be allowed to use the thread's default unprivileged stack,
+     * (i.e push to or pop from it), to avoid a possible stack corruption.
+     *
+     * Rationale: since we execute in PRIV mode and no MPU guard or PSPLIM
+     * register is guarding the end of the default stack, we won't be able
+     * to detect any stack overflows.
+     */
+
+#if defined(CONFIG_BUILTIN_STACK_GUARD)
+    /* clear stack pointer limit before setting the PSP */
+    mov ip, #0
+    msr PSPLIM, ip
+#endif
+
+    /* setup privileged stack */
+    ldr ip, =_kernel
+    ldr ip, [ip, #_kernel_offset_to_current]
+    ldr ip, [ip, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
+    add ip, #CONFIG_PRIVILEGED_STACK_SIZE
+
+    /* Store current SP and LR at the beginning of the priv stack */
+    subs ip, #8
+    str sp, [ip, #0]
+    str lr, [ip, #4]
+
+    /* switch to privileged stack */
+    msr PSP, ip
+
+#if defined(CONFIG_BUILTIN_STACK_GUARD)
+    /* Set stack pointer limit (needed in privileged mode) */
+    ldr ip, =_kernel
+    ldr ip, [ip, #_kernel_offset_to_current]
+    ldr ip, [ip, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
+    msr PSPLIM, ip
+#endif
+
     /*
      * r0-r5 contain arguments
      * r6 contains call_id
@@ -188,45 +229,12 @@ SECTION_FUNC(TEXT, z_arm_do_syscall)
     bne valid_syscall
 
     /* BAD SYSCALL path */
-    /* fixup stack frame on unprivileged stack, adding ssf */
+    /* fixup stack frame on the privileged stack, adding ssf */
     mov ip, sp
     push {r4,r5,ip,lr}
     b dispatch_syscall
 
 valid_syscall:
-    /* setup privileged stack */
-    push {r6}
-    ldr r6, =_kernel
-    ldr r6, [r6, #_kernel_offset_to_current]
-    ldr ip, [r6, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
-    ldr r6, =CONFIG_PRIVILEGED_STACK_SIZE
-    add ip, r6
-    pop {r6}
-    subs ip, #8
-    str sp, [ip, #0]
-    str lr, [ip, #4]
-
-#if defined(CONFIG_BUILTIN_STACK_GUARD)
-    /* clear stack pointer limit before setting the PSP */
-    push {r3}
-    mov r3, #0
-    msr PSPLIM, r3
-    pop {r3}
-#endif
-
-    /* switch to privileged stack */
-    msr PSP, ip
-
-#if defined(CONFIG_BUILTIN_STACK_GUARD)
-    /* Set stack pointer limit (needed in privileged mode) */
-    push {r6}
-    ldr r6, =_kernel
-    ldr r6, [r6, #_kernel_offset_to_current]
-    ldr r6, [r6, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
-    msr PSPLIM, r6
-    pop {r6}
-#endif
-
     /* push args to complete stack frame */
     push {r4,r5}
 

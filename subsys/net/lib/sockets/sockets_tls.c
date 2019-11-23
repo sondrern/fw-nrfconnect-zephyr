@@ -12,12 +12,12 @@
 LOG_MODULE_REGISTER(net_sock_tls, CONFIG_NET_SOCKETS_LOG_LEVEL);
 
 #include <init.h>
-#include <entropy.h>
-#include <misc/util.h>
+#include <drivers/entropy.h>
+#include <sys/util.h>
 #include <net/net_context.h>
 #include <net/socket.h>
 #include <syscall_handler.h>
-#include <misc/fdtable.h>
+#include <sys/fdtable.h>
 
 #if defined(CONFIG_MBEDTLS)
 #if !defined(CONFIG_MBEDTLS_CFG_FILE)
@@ -1265,6 +1265,10 @@ int ztls_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 	fd = z_reserve_fd();
 	if (fd < 0) {
 		return -1;
+	}
+
+	if (net_context_get_ip_proto(parent) == IPPROTO_TCP) {
+		net_context_set_state(parent, NET_CONTEXT_LISTENING);
 	}
 
 	child = k_fifo_get(&parent->accept_q, K_FOREVER);

@@ -8,15 +8,14 @@
 
 #include <kernel.h>
 #include <init.h>
-#include <i2c.h>
-#include <sensor.h>
-#include <misc/__assert.h>
+#include <drivers/i2c.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "isl29035.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(ISL29035);
+LOG_MODULE_REGISTER(ISL29035, CONFIG_SENSOR_LOG_LEVEL);
 
 static int isl29035_sample_fetch(struct device *dev, enum sensor_channel chan)
 {

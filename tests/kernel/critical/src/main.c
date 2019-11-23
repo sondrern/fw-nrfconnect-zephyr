@@ -154,7 +154,7 @@ void regression_thread(void *arg1, void *arg2, void *arg3)
 	ARG_UNUSED(arg2);
 	ARG_UNUSED(arg3);
 
-	k_sem_give(&ALT_SEM);   /* Activate alternate_tast() */
+	k_sem_give(&ALT_SEM);   /* Activate alternate_thread() */
 
 	ncalls = critical_loop(ncalls);
 
@@ -196,11 +196,11 @@ static void start_threads(void)
 {
 	k_thread_create(&thread1, stack1, STACK_SIZE,
 			alternate_thread, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(12), 0, 0);
+			K_PRIO_PREEMPT(12), 0, K_NO_WAIT);
 
 	k_thread_create(&thread2, stack2, STACK_SIZE,
 			regression_thread, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(12), 0, 0);
+			K_PRIO_PREEMPT(12), 0, K_NO_WAIT);
 }
 
 /**
@@ -223,7 +223,7 @@ void test_critical(void)
 void test_main(void)
 {
 	ztest_test_suite(kernel_critical,
-			 ztest_unit_test(test_critical)
+			 ztest_1cpu_unit_test(test_critical)
 			 );
 	ztest_run_test_suite(kernel_critical);
 }

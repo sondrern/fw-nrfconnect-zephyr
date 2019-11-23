@@ -102,6 +102,8 @@ add_custom_target(${IMAGE}code_data_relocation_target)
 # and its associated variables, e.g. PROJECT_SOURCE_DIR.
 # It is recommended to always use ZEPHYR_BASE instead of PROJECT_SOURCE_DIR
 # when trying to reference ENV${ZEPHYR_BASE}.
+
+# Note any later project() resets PROJECT_SOURCE_DIR
 file(TO_CMAKE_PATH "$ENV{ZEPHYR_BASE}" PROJECT_SOURCE_DIR)
 
 set(ZEPHYR_BINARY_DIR ${PROJECT_BINARY_DIR})
@@ -274,6 +276,11 @@ else() # NOT FIRST_BOILERPLATE_EXECUTION
     message("Changed board to secure nrf9160_pca20035 (NOT NS)")
   endif()
 
+  if(${BOARD} STREQUAL actinius_icarus_ns)
+    set(BOARD actinius_icarus)
+    message("Changed board to secure actinius_icarus (NOT NS)")
+  endif()
+
   unset(${IMAGE}DTC_OVERLAY_FILE)
   if(EXISTS              ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
     set(${IMAGE}DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
@@ -393,6 +400,7 @@ foreach(root ${BOARD_ROOT})
       list(FIND SHIELD_LIST ${s} _idx)
       if (NOT _idx EQUAL -1)
         list(GET shields_refs_list ${_idx} s_path)
+        get_filename_component(s_dir ${s_path} DIRECTORY)
 
         # if shield config flag is on, add shield overlay to the shield overlays
         # list and dts_fixup file to the shield fixup file
@@ -402,37 +410,55 @@ foreach(root ${BOARD_ROOT})
         )
         list(APPEND
           shield_dts_fixups
-          ${shield_dir}/${s}/dts_fixup.h
+          ${shield_dir}/${s_dir}/dts_fixup.h
         )
+
+        # search for shield/boards/board.overlay file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${BOARD}.overlay)
+          # add shield/board overlay to the shield overlays list
+          list(APPEND
+            shield_dts_files
+            ${shield_dir}/${s_dir}/boards/${BOARD}.overlay
+          )
+        endif()
+
+        # search for shield/boards/shield/board.overlay file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.overlay)
+          # add shield/board overlay to the shield overlays list
+          list(APPEND
+            shield_dts_files
+            ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.overlay
+          )
+        endif()
+
+        # search for shield/shield.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/${s}.conf)
+          # add shield.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/${s}.conf
+          )
+        endif()
+
+        # search for shield/boards/board.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${BOARD}.conf)
+          # add HW specific board.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/boards/${BOARD}.conf
+          )
+        endif()
+
+        # search for shield/boards/shield/board.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.conf)
+          # add HW specific board.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.conf
+          )
+        endif()
       else()
         list(APPEND NOT_FOUND_SHIELD_LIST ${s})
-      endif()
-
-      # search for shield/boards/board.overlay file
-      if(EXISTS ${shield_dir}/${s}/boards/${BOARD}.overlay)
-        # add shield/board overlay to the shield overlays list
-        list(APPEND
-          shield_dts_files
-          ${shield_dir}/${s}/boards/${BOARD}.overlay
-        )
-      endif()
-
-      # search for shield/shield.conf file
-      if(EXISTS ${shield_dir}/${s}/${s}.conf)
-        # add shield.conf to the shield config list
-        list(APPEND
-          shield_conf_files
-          ${shield_dir}/${s}/${s}.conf
-        )
-      endif()
-
-      # search for shield/boards/board.conf file
-      if(EXISTS ${shield_dir}/${s}/boards/${BOARD}.conf)
-        # add HW specific board.conf to the shield config list
-        list(APPEND
-          shield_conf_files
-          ${shield_dir}/${s}/boards/${BOARD}.conf
-        )
       endif()
     endforeach()
   endif()
@@ -500,14 +526,26 @@ elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj.conf)
   set(${IMAGE}CONF_FILE ${APPLICATION_SOURCE_DIR}/prj.conf)
 endif()
 
+if(ZEPHYR_EXTRA_MODULES)
+  # ZEPHYR_EXTRA_MODULES has either been specified on the cmake CLI or is
+  # already in the CMakeCache.txt. This has precedence over the environment
+  # variable ZEPHYR_EXTRA_MODULES
+elseif(DEFINED ENV{ZEPHYR_EXTRA_MODULES})
+  set(ZEPHYR_EXTRA_MODULES $ENV{ZEPHYR_EXTRA_MODULES})
+endif()
+
 if(${IMAGE}DTC_OVERLAY_FILE)
   # DTC_OVERLAY_FILE has either been specified on the cmake CLI or is
   # already in the CMakeCache.txt. This has precedence over the
   # environment variable DTC_OVERLAY_FILE
 elseif(DEFINED ENV{${IMAGE}DTC_OVERLAY_FILE})
   set(${IMAGE}DTC_OVERLAY_FILE $ENV{${IMAGE}DTC_OVERLAY_FILE})
+elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/boards/${BOARD}.overlay)
+  set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/boards/${BOARD}.overlay)
 elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
   set(${IMAGE}DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
+elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/app.overlay)
+  set(${IMAGE}DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/app.overlay)
 endif()
 
 set(${IMAGE}CONF_FILE ${${IMAGE}CONF_FILE} CACHE STRING "If desired, you can build the application using\
@@ -539,6 +577,15 @@ else()
 endif()
 
 include(${ZEPHYR_BASE}/cmake/target_toolchain.cmake)
+
+project(Zephyr-Kernel VERSION ${PROJECT_VERSION})
+enable_language(C CXX ASM)
+
+# 'project' sets PROJECT_BINARY_DIR to ${CMAKE_CURRENT_BINARY_DIR},
+# but for legacy reasons we need it to be set to
+# ${CMAKE_CURRENT_BINARY_DIR}/zephyr
+set(PROJECT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/zephyr)
+set(PROJECT_SOURCE_DIR ${ZEPHYR_BASE})
 
 set(KERNEL_NAME ${CONFIG_KERNEL_BIN_NAME})
 
@@ -582,6 +629,13 @@ if(CONFIG_QEMU_TARGET)
     )
   endif()
 endif()
+
+# General purpose Zephyr target.
+# This target can be used for custom zephyr settings that needs to be used elsewhere in the build system
+#
+# Currently used properties:
+# - COMPILES_OPTIONS: Used by application memory partition feature
+add_custom_target(${IMAGE}zephyr_property_target)
 
 # "app" is a CMake library containing all the application code and is
 # modified by the entry point ${APPLICATION_SOURCE_DIR}/CMakeLists.txt

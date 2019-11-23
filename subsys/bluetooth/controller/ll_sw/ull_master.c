@@ -6,7 +6,7 @@
 
 #include <zephyr.h>
 #include <bluetooth/hci.h>
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "util/util.h"
 #include "util/memq.h"
@@ -118,11 +118,6 @@ u8_t ll_create_connection(u16_t scan_interval, u16_t scan_window,
 	conn_lll->nesn = 0;
 	conn_lll->empty = 0;
 
-#if defined(CONFIG_BT_CTLR_LE_ENC)
-	conn_lll->enc_rx = 0;
-	conn_lll->enc_tx = 0;
-#endif /* CONFIG_BT_CTLR_LE_ENC */
-
 #if defined(CONFIG_BT_CTLR_DATA_LENGTH)
 	conn_lll->max_tx_octets = PDU_DC_PAYLOAD_SIZE_MIN;
 	conn_lll->max_rx_octets = PDU_DC_PAYLOAD_SIZE_MIN;
@@ -159,6 +154,9 @@ u8_t ll_create_connection(u16_t scan_interval, u16_t scan_window,
 	conn_lll->data_chan_use = 0;
 	conn_lll->role = 0;
 	/* FIXME: END: Move to ULL? */
+#if defined(CONFIG_BT_CTLR_CONN_META)
+	memset(&conn_lll->conn_meta, 0, sizeof(conn_lll->conn_meta));
+#endif /* CONFIG_BT_CTLR_CONN_META */
 
 	conn->connect_expire = 6U;
 	conn->supervision_expire = 0U;
@@ -197,7 +195,10 @@ u8_t ll_create_connection(u16_t scan_interval, u16_t scan_window,
 	conn->llcp_terminate.node_rx.hdr.link = link;
 
 #if defined(CONFIG_BT_CTLR_LE_ENC)
-	conn->pause_tx = conn->pause_rx = conn->refresh = 0U;
+	conn_lll->enc_rx = conn_lll->enc_tx = 0U;
+	conn->llcp_enc.req = conn->llcp_enc.ack = 0U;
+	conn->llcp_enc.pause_tx = conn->llcp_enc.pause_rx = 0U;
+	conn->llcp_enc.refresh = 0U;
 #endif /* CONFIG_BT_CTLR_LE_ENC */
 
 #if defined(CONFIG_BT_CTLR_CONN_PARAM_REQ)
@@ -337,16 +338,14 @@ u8_t ll_enc_req_send(u16_t handle, u8_t *rand, u8_t *ediv, u8_t *ltk)
 {
 	struct ll_conn *conn;
 	struct node_tx *tx;
-	u8_t ret;
 
 	conn = ll_connected_get(handle);
 	if (!conn) {
 		return BT_HCI_ERR_UNKNOWN_CONN_ID;
 	}
 
-	ret = ull_conn_llcp_req(conn);
-	if (ret) {
-		return ret;
+	if (conn->llcp_enc.req != conn->llcp_enc.ack) {
+		return BT_HCI_ERR_CMD_DISALLOWED;
 	}
 
 	tx = ll_tx_mem_acquire();
@@ -355,8 +354,7 @@ u8_t ll_enc_req_send(u16_t handle, u8_t *rand, u8_t *ediv, u8_t *ltk)
 
 		pdu_data_tx = (void *)tx->pdu;
 
-		memcpy(&conn->llcp.encryption.ltk[0], ltk,
-		       sizeof(conn->llcp.encryption.ltk));
+		memcpy(&conn->llcp_enc.ltk[0], ltk, sizeof(conn->llcp_enc.ltk));
 
 		if ((conn->lll.enc_rx == 0) && (conn->lll.enc_tx == 0)) {
 			struct pdu_data_llctrl_enc_req *enc_req;
@@ -375,11 +373,11 @@ u8_t ll_enc_req_send(u16_t handle, u8_t *rand, u8_t *ediv, u8_t *ltk)
 			bt_rand(enc_req->skdm, sizeof(enc_req->skdm));
 			bt_rand(enc_req->ivm, sizeof(enc_req->ivm));
 		} else if ((conn->lll.enc_rx != 0) && (conn->lll.enc_tx != 0)) {
-			memcpy(&conn->llcp.encryption.rand[0], rand,
-			       sizeof(conn->llcp.encryption.rand));
+			memcpy(&conn->llcp_enc.rand[0], rand,
+			       sizeof(conn->llcp_enc.rand));
 
-			conn->llcp.encryption.ediv[0] = ediv[0];
-			conn->llcp.encryption.ediv[1] = ediv[1];
+			conn->llcp_enc.ediv[0] = ediv[0];
+			conn->llcp_enc.ediv[1] = ediv[1];
 
 			pdu_data_tx->ll_id = PDU_DATA_LLID_CTRL;
 			pdu_data_tx->len = offsetof(struct pdu_data_llctrl,
@@ -398,10 +396,7 @@ u8_t ll_enc_req_send(u16_t handle, u8_t *rand, u8_t *ediv, u8_t *ltk)
 			return BT_HCI_ERR_CMD_DISALLOWED;
 		}
 
-		conn->llcp.encryption.initiate = 1U;
-
-		conn->llcp_type = LLCP_ENCRYPTION;
-		conn->llcp_req++;
+		conn->llcp_enc.req++;
 
 		return 0;
 	}
@@ -546,10 +541,10 @@ void ull_master_setup(memq_link_t *link, struct node_rx_hdr *rx,
 	conn_offset_us -= EVENT_OVERHEAD_START_US;
 	conn_offset_us -= ftr->us_radio_rdy;
 
+#if (CONFIG_BT_CTLR_ULL_HIGH_PRIO == CONFIG_BT_CTLR_ULL_LOW_PRIO)
 	/* disable ticker job, in order to chain stop and start to avoid RTC
 	 * being stopped if no tickers active.
 	 */
-#if (CONFIG_BT_CTLR_ULL_HIGH_PRIO == CONFIG_BT_CTLR_ULL_LOW_PRIO)
 	mayfly_was_enabled = mayfly_is_enabled(TICKER_USER_ID_ULL_HIGH,
 					       TICKER_USER_ID_ULL_LOW);
 	mayfly_enable(TICKER_USER_ID_ULL_HIGH, TICKER_USER_ID_ULL_LOW, 0);

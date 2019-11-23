@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <display.h>
+#include <drivers/display.h>
 #include "display_ili9340.h"
 
 /*
@@ -22,7 +22,7 @@ void ili9340_lcd_init(struct ili9340_data *p_ili9340)
 	cmd = ILI9340_CMD_SOFTWARE_RESET;
 	ili9340_transmit(p_ili9340, cmd, NULL, 0);
 
-	k_sleep(5);
+	k_sleep(K_MSEC(5));
 
 	cmd = ILI9341_CMD_POWER_CTRL_B;
 	data[0] = 0x00U;
@@ -125,7 +125,7 @@ void ili9340_lcd_init(struct ili9340_data *p_ili9340)
 	ili9340_transmit(p_ili9340, cmd, data, 1);
 
 	/* Positive Gamma Correction */
-	cmd = ILI9340_CMD_POSITVE_GAMMA_CORRECTION;
+	cmd = ILI9340_CMD_POSITIVE_GAMMA_CORRECTION;
 	data[0] = 0x0FU;
 	data[1] = 0x2AU;
 	data[2] = 0x28U;
@@ -166,7 +166,7 @@ void ili9340_lcd_init(struct ili9340_data *p_ili9340)
 	cmd = ILI9340_CMD_EXIT_SLEEP;
 	ili9340_transmit(p_ili9340, cmd, NULL, 0);
 
-	k_sleep(120);
+	k_sleep(K_MSEC(120));
 
 	/* Display Off */
 	cmd = ILI9340_CMD_DISPLAY_OFF;

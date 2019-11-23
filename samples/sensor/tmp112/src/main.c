@@ -6,9 +6,9 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
-#include <misc/printk.h>
-#include <misc/__assert.h>
+#include <drivers/sensor.h>
+#include <sys/printk.h>
+#include <sys/__assert.h>
 
 static void do_main(struct device *dev)
 {
@@ -50,7 +50,7 @@ static void do_main(struct device *dev)
 		printk("temp is %d (%d micro)\n", temp_value.val1,
 		       temp_value.val2);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }
 

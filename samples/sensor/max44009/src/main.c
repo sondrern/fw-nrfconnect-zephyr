@@ -5,8 +5,8 @@
  */
 
 #include <zephyr.h>
-#include <misc/printk.h>
-#include <sensor.h>
+#include <sys/printk.h>
+#include <drivers/sensor.h>
 
 /**
  * @file Sample app using the MAX44009 light sensor through ARC I2C.
@@ -43,6 +43,6 @@ void main(void)
 		lum = val.val1;
 		printk("sensor: lum reading: %d\n", lum);
 
-		k_sleep(4000);
+		k_sleep(K_MSEC(4000));
 	}
 }

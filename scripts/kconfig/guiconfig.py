@@ -3,6 +3,12 @@
 # Copyright (c) 2019, Nordic Semiconductor ASA and Ulf Magnusson
 # SPDX-License-Identifier: ISC
 
+# _load_images() builds names dynamically to avoid having to give them twice
+# (once for the variable and once for the filename). This forces consistency
+# too.
+#
+# pylint: disable=undefined-variable
+
 """
 Overview
 ========
@@ -175,11 +181,11 @@ def menuconfig(kconf):
 
     _create_ui()
 
-    # Load existing configuration and check if it's outdated
-    _set_conf_changed(_load_config())
-
     # Filename to save configuration to
     _conf_filename = standard_config_filename()
+
+    # Load existing configuration and check if it's outdated
+    _set_conf_changed(_load_config())
 
     # Filename to save minimal configuration to
     _minconf_filename = "defconfig"
@@ -238,7 +244,8 @@ def _load_config():
     # Returns True if .config is missing or outdated. We always prompt for
     # saving the configuration in that case.
 
-    if not _kconf.load_config():
+    print(_kconf.load_config())
+    if not os.path.exists(_conf_filename):
         # No .config
         return True
 
@@ -639,7 +646,8 @@ def _set_conf_changed(changed):
     global _conf_changed
 
     _conf_changed = changed
-    _set_status("Modified" if changed else "")
+    if changed:
+        _set_status("Modified")
 
 
 def _update_tree():
@@ -1306,15 +1314,13 @@ def _check_valid(dialog, entry, sym, s):
 
     for low_sym, high_sym, cond in sym.ranges:
         if expr_value(cond):
-            low = int(low_sym.str_value, base)
-            val = int(s, base)
-            high = int(high_sym.str_value, base)
+            low_s = low_sym.str_value
+            high_s = high_sym.str_value
 
-            if not low <= val <= high:
+            if not int(low_s, base) <= int(s, base) <= int(high_s, base):
                 messagebox.showerror(
                     "Value out of range",
-                    "{} is outside the range {}-{}".format(
-                        s, low_sym.str_value, high_sym.str_value),
+                    "{} is outside the range {}-{}".format(s, low_s, high_s),
                     parent=dialog)
                 entry.focus_set()
                 return False
@@ -1341,7 +1347,6 @@ def _save(_=None):
 
     if _try_save(_kconf.write_config, _conf_filename, "configuration"):
         _set_conf_changed(False)
-        _set_status("Configuration saved to " + _conf_filename)
 
     _tree.focus_set()
 
@@ -1363,7 +1368,6 @@ def _save_as():
             break
 
         if _try_save(_kconf.write_config, filename, "configuration"):
-            _set_status("Configuration saved to " + filename)
             _conf_filename = filename
             break
 
@@ -1433,7 +1437,6 @@ def _open(_=None):
 
             _update_tree()
 
-            _set_status("Configuration loaded from " + filename)
             break
 
     _tree.focus_set()
@@ -1694,10 +1697,12 @@ def _try_save(save_fn, filename, description):
     #   String describing the thing being saved
 
     try:
-        save_fn(filename)
-        print("{} saved to '{}'".format(description, filename))
+        # save_fn() returns a message to print
+        msg = save_fn(filename)
+        _set_status(msg)
+        print(msg)
         return True
-    except (OSError, IOError) as e:
+    except EnvironmentError as e:
         messagebox.showerror(
             "Error saving " + description,
             "Error saving {} to '{}': {} (errno: {})"
@@ -1714,10 +1719,11 @@ def _try_load(filename):
     #   Configuration file to load
 
     try:
-        _kconf.load_config(filename)
-        print("configuration loaded from " + filename)
+        msg = _kconf.load_config(filename)
+        _set_status(msg)
+        print(msg)
         return True
-    except (OSError, IOError) as e:
+    except EnvironmentError as e:
         messagebox.showerror(
             "Error loading configuration",
             "Error loading '{}': {} (errno: {})"
@@ -2119,9 +2125,12 @@ def _defaults_info(sc):
     if not sc.defaults:
         return ""
 
-    s = "Defaults:\n"
+    s = "Default"
+    if len(sc.defaults) > 1:
+        s += "s"
+    s += ":\n"
 
-    for val, cond in sc.defaults:
+    for val, cond in sc.orig_defaults:
         s += "  - "
         if isinstance(sc, Symbol):
             s += _expr_str(val)
@@ -2222,7 +2231,7 @@ def _kconfig_def_info(item):
 
     nodes = [item] if isinstance(item, MenuNode) else item.nodes
 
-    s = "Kconfig definition{}, with propagated dependencies\n" \
+    s = "Kconfig definition{}, with parent deps. propagated to 'depends on'\n" \
         .format("s" if len(nodes) > 1 else "")
     s += (len(s) - 1)*"="
 

@@ -30,8 +30,10 @@ If you have :ref:`west <west>` installed, you don't need to worry about how
 this variable is defined unless you are adding a new module. The build system
 knows how to use west to set :makevar:`ZEPHYR_MODULES`. You can add additional
 modules to this list by setting the :makevar:`ZEPHYR_EXTRA_MODULES` CMake
-variable. This can be useful if you want to keep the list of modules found with
-west and also add your own.
+variable or by adding a :makevar:`ZEPHYR_EXTRA_MODULES` line to ``.zephyrrc``
+(See the section on :ref:`env_vars` for more details). This can be
+useful if you want to keep the list of modules found with west and also add
+your own.
 
 See the section about :ref:`west-multi-repo` for more details.
 
@@ -169,7 +171,7 @@ Requirements
 
 Modules to be included in the default manifest of the Zephyr project need to
 provide functionality or features endorsed and approved by the project technical
-steering committee and should follow the project licencing and
+steering committee and should follow the project licensing and
 :ref:`contribute_guidelines`.
 
 A request for a new module should be initialized using an RFC issue in the
@@ -179,7 +181,7 @@ created by the project team and initialized with basic information that would
 allow submitting code to the module project following the project contribution
 guidelines.
 
-All modules should be hosted in repositories under the Zephyr organisation. The
+All modules should be hosted in repositories under the Zephyr organization. The
 manifest should only point to repositories maintained under the Zephyr project.
 If a module is maintained as a fork of another project on Github, the Zephyr module
 related files and changes in relation to upstream need to be maintained in a

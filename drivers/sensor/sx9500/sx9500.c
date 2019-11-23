@@ -9,17 +9,16 @@
 #include <errno.h>
 
 #include <kernel.h>
-#include <i2c.h>
-#include <sensor.h>
+#include <drivers/i2c.h>
+#include <drivers/sensor.h>
 #include <init.h>
-#include <gpio.h>
-#include <misc/__assert.h>
+#include <drivers/gpio.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "sx9500.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(SX9500);
+LOG_MODULE_REGISTER(SX9500, CONFIG_SENSOR_LOG_LEVEL);
 
 static u8_t sx9500_reg_defaults[] = {
 	/*
@@ -34,7 +33,7 @@ static u8_t sx9500_reg_defaults[] = {
 	0x40,	/* Doze enabled, 2x scan period doze, no raw filter. */
 	0x30,	/* Average threshold. */
 	0x0f,	/* Debouncer off, lowest average negative filter,
-		 * highest average postive filter.
+		 * highest average positive filter.
 		 */
 	0x0e,	/* Proximity detection threshold: 280 */
 	0x00,	/* No automatic compensation, compensate each pin

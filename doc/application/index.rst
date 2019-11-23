@@ -15,7 +15,7 @@ Application Development
 Overview
 ********
 
-Zephyr's build system is based on CMake.
+Zephyr's build system is based on `CMake`_.
 
 The build system is application-centric, and requires Zephyr-based applications
 to initiate building the kernel source tree. The application build controls
@@ -64,11 +64,6 @@ Once an application has been defined, you can use CMake to create project files
 for building it from a directory where you want to host these files. This is
 known as the **build directory**. Application build artifacts are always
 generated in a build directory; Zephyr does not support "in-tree" builds.
-
-.. important::
-
-   You must create a build directory yourself, and call ``cmake`` from
-   there. The Zephyr build system does not create build directories for you.
 
 The following sections describe how to create, build, and run Zephyr
 applications, followed by more detailed reference material.
@@ -123,9 +118,8 @@ subdirectories which are not described here.
     Device driver code.
 
 :file:`dts`
-    Device tree source (.dts) files used to describe non-discoverable
-    board-specific hardware details previously hard coded in the OS
-    source code.
+    :ref:`device-tree` source files used to describe non-discoverable
+    board-specific hardware details.
 
 :file:`ext`
     Externally created code that has been integrated into Zephyr
@@ -237,11 +231,8 @@ Follow these steps to create a new application directory. (Refer to
    are interested in.  See :ref:`application_kconfig` for more details, and
    :ref:`configuration_options` for a complete list of available options.
 
-#. Optionally, you can also configure any Device Tree overlays needed by your
-   application. Zephyr uses the same Device Tree system as the Linux kernel,
-   but with its own definitions.
-
-   This is usually not necessary; see :ref:`application_dt` below for details.
+#. Optionally, you can also configure any devicetree overlays needed by your
+   application. See :ref:`application_dt` below for details.
 
 .. _important-build-vars:
 
@@ -258,10 +249,9 @@ should know about.
    :makevar:`DTC_OVERLAY_FILE` can be supplied to the build system in
    3 ways (in order of precedence):
 
-   * As a parameter to the ``cmake`` invocation via the ``-D`` command-line
-     switch
-   * As an environment variables (``export`` on Linux/macOS and ``set`` on
-     Windows)
+   * As a parameter to the ``west build`` or ``cmake`` invocation via the
+     ``-D`` command-line switch
+   * As :ref:`env_vars`.
    * As a ``set(<VARIABLE> <VALUE>)`` statement in your :file:`CMakeLists.txt`
 
 * :makevar:`ZEPHYR_BASE`: Sets the path to the directory containing Zephyr,
@@ -282,10 +272,11 @@ should know about.
   semicolons. Each file includes Kconfig configuration values that override
   the default configuration values.
 
-* :makevar:`DTC_OVERLAY_FILE`: Indicates the name of one or more Device Tree
+* :makevar:`DTC_OVERLAY_FILE`: Indicates the name of one or more devicetree
   overlay files. Multiple filenames can be separated with either spaces or
-  semicolons. Each file includes Device Tree values that override the default
-  DT values.
+  semicolons. Each file includes devicetree values that override the default
+  DT values. See :ref:`application_dt` below for details on devicetree
+  overlays, and :ref:`device-tree` for an overview on devicetree and Zephyr.
 
 * :makevar:`ZEPHYR_MODULES`: A CMake list containing absolute paths of
   additional directories with source code, Kconfig, etc. that should be used in
@@ -293,26 +284,72 @@ should know about.
 
 .. _build_an_application:
 
-Build an Application
-********************
+Building an Application
+***********************
 
 The Zephyr build system compiles and links all components of an application
 into a single application image that can be run on simulated hardware or real
 hardware.
 
-As described in :ref:`getting_started_cmake`, on Linux and macOS you can choose
-between the ``make`` and ``ninja`` generators, whereas on Windows you need to use
-``ninja``. For simplicity we will use ``ninja`` throughout this guide.
+Like any other CMake-based system, the build process takes place :ref:`in
+two stages <cmake-details>`. First, build files (also known as a buildsystem)
+are generated using the ``cmake`` command-line tool while specifying a
+generator. This generator determines the native build tool the buildsystem
+will use in the second stage.
+The second stage runs the native build tool to actually build the
+source files and generate an image. To learn more about these concepts refer to
+the `CMake introduction`_ in the official CMake documentation.
+
+Although the default build tool in Zephyr is :std:ref:`west <west>`, Zephyr's
+meta-tool, which invokes ``cmake`` and the underlying build tool (``ninja`` or
+``make``) behind the scenes, you can also choose to invoke ``cmake`` directly if
+you prefer.  On Linux and macOS you can choose between the ``make`` and
+``ninja``
+generators (i.e. build tools), whereas on Windows you need to use ``ninja``,
+since ``make`` is not supported on this platform.
+For simplicity we will use ``ninja`` throughout this guide, and if you
+choose to use ``west build`` to build your application know that it will
+default to ``ninja`` under the hood.
+
+As an example, let's build the Hello World sample for the ``reel_board``:
+
+.. zephyr-app-commands::
+   :tool: all
+   :app: samples/hello_world
+   :board: reel_board
+   :goals: build
+
+On Linux and macOS, you can also build with ``make`` instead of ``ninja``:
+
+Using west:
+
+- to use ``make`` just once, add ``-- -G"Unix Makefiles"`` to the west build
+  command line; see the :ref:`west build <west-building-generator>`
+  documentation for an example.
+- to use ``make`` by default from now on, run ``west config build.generator
+  "Unix Makefiles"``.
+
+Using CMake directly:
+
+.. zephyr-app-commands::
+   :tool: cmake
+   :app: samples/hello_world
+   :generator: make
+   :host-os: unix
+   :board: reel_board
+   :goals: build
+
 
 Basics
 ======
 
 #. Navigate to the application directory :file:`<home>/app`.
-
 #. Enter the following commands to build the application's :file:`zephyr.elf`
    image for the board specified in the command-line parameters:
 
    .. zephyr-app-commands::
+      :tool: all
+      :cd-into:
       :board: <board>
       :goals: build
 
@@ -321,15 +358,20 @@ Basics
    parameter. These settings will override the settings in the application's
    :file:`.config` file or its default :file:`.conf` file. For example:
 
-   .. code-block:: console
-
-       cmake -GNinja -DBOARD=<board> -DCONF_FILE=prj.alternate.conf ..
-       ninja
+   .. zephyr-app-commands::
+      :tool: all
+      :cd-into:
+      :board: <board>
+      :gen-args: -DCONF_FILE=prj.alternate.conf
+      :goals: build
+      :compact:
 
    As described in the previous section, you can instead choose to permanently
    set the board and configuration settings by either exporting :makevar:`BOARD`
    and :makevar:`CONF_FILE` environment variables or by setting their values
    in your :file:`CMakeLists.txt` using ``set()`` statements.
+   Additionally, ``west`` allows you to :ref:`set a default board
+   <west-building-config>`.
 
 Build Directory Contents
 ========================
@@ -395,26 +437,42 @@ because it fails to recompile one or more necessary files. You can force
 the build system to rebuild the entire application from scratch with the
 following procedure:
 
-
 #. Open a terminal console on your host computer, and navigate to the
    build directory :file:`<home>/app/build`.
 
-#. Enter the following command to delete the application's generated
+#. Enter one of the following commands, depending on whether you want to use
+   ``west`` or ``cmake`` directly to delete the application's generated
    files, except for the :file:`.config` file that contains the
    application's current configuration information.
 
    .. code-block:: console
 
+       west build -t clean
+
+   or
+
+   .. code-block:: console
+
        ninja clean
 
-   Alternatively, enter the following command to delete *all*
+   Alternatively, enter one of the following commands to delete *all*
    generated files, including the :file:`.config` files that contain
    the application's current configuration information for those board
    types.
 
    .. code-block:: console
 
+       west build -t pristine
+
+   or
+
+   .. code-block:: console
+
        ninja pristine
+
+   If you use west, you can take advantage of its capability to automatically
+   :ref:`make the build folder pristine <west-building-config>` whenever it is
+   required.
 
 #. Rebuild the application normally following the steps specified
    in :ref:`build_an_application` above.
@@ -433,7 +491,7 @@ Running on a Board
 ==================
 
 Most boards supported by Zephyr let you flash a compiled binary using
-the CMake ``flash`` target to copy the binary to the board and run it.
+the ``flash`` target to copy the binary to the board and run it.
 Follow these instructions to flash and run an application on real
 hardware:
 
@@ -442,8 +500,15 @@ hardware:
 #. Make sure your board is attached to your host computer. Usually, you'll do
    this via USB.
 
-#. Run this console command from the build directory, :file:`<home>/app/build`,
-   to flash the compiled Zephyr binary and run it on your board:
+#. Run one of these console commands from the build directory,
+   :file:`<home>/app/build`, to flash the compiled Zephyr image and run it on
+   your board:
+
+   .. code-block:: console
+
+      west flash
+
+   or
 
    .. code-block:: console
 
@@ -485,8 +550,14 @@ hardware. Follow these instructions to run an application via QEMU:
    - ``qemu_x86`` to emulate running on an x86-based board
    - ``qemu_cortex_m3`` to emulate running on an ARM Cortex M3-based board
 
-#. Run this console command from the build directory, :file:`<home>/app/build`,
-   to flash the compiled Zephyr binary and run it in QEMU:
+#. Run one of these console commands from the build directory,
+   :file:`<home>/app/build`, to run the Zephyr binary in QEMU:
+
+   .. code-block:: console
+
+      west build -t run
+
+   or
 
    .. code-block:: console
 
@@ -502,10 +573,12 @@ Each time you execute the run command, your application is rebuilt and run
 again.
 
 
-.. note:: The ``run`` target will use the QEMU binary available from the Zephyr
-          SDK by default. To use an alternate version of QEMU, for example the
-          version installed on your host or a custom version, set the
-          environment variable ``QEMU_BIN_PATH`` to the alternate path.
+.. note::
+
+   If the (Linux only) :ref:`Zephyr SDK <zephyr_sdk>` is installed, the ``run``
+   target will use the SDK's QEMU binary by default. To use another version of
+   QEMU, :ref:`set the environment variable <env_vars>` :envvar:`QEMU_BIN_PATH`
+   to the path of the QEMU binary you want to use instead.
 
 .. _application_debugging:
 .. _custom_board_definition:
@@ -580,10 +653,14 @@ Zephyr board, and provide the following files::
 Once the board structure is in place, you can build your application
 targeting this board by specifying the location of your custom board
 information with the ``-DBOARD_ROOT`` parameter to the CMake
-build system::
+build system:
 
-   cmake -DBOARD=<board name> -DBOARD_ROOT=<path to boards> ..
-
+.. zephyr-app-commands::
+   :tool: all
+   :board: <board name>
+   :gen-args: -DBOARD_ROOT=<path to boards>
+   :goals: build
+   :compact:
 
 This will use your custom board configuration and will generate the
 Zephyr binary into your application directory.
@@ -633,10 +710,14 @@ custom SOC definitions:
 Once the SOC structure is in place, you can build your application
 targeting this platform by specifying the location of your custom platform
 information with the ``-DSOC_ROOT`` parameter to the CMake
-build system::
+build system:
 
-   cmake -DBOARD=<board name> -DSOC_ROOT=<path to soc> -DBOARD_ROOT=<path to boards> ..
-
+.. zephyr-app-commands::
+   :tool: all
+   :board: <board name>
+   :gen-args: -DSOC_ROOT=<path to soc> -DBOARD_ROOT=<path to boards>
+   :goals: build
+   :compact:
 
 This will use your custom platform configurations and will generate the
 Zephyr binary into your application directory.
@@ -647,22 +728,29 @@ You can also define the ``SOC_ROOT`` variable in the application
 DeviceTree Definitions
 ======================
 
-Additional DeviceTree directory trees, or DTS_ROOTs, can be added by
-creating this directory tree::
+DeviceTree directory trees are found in ``APPLICATION_SOURCE_DIR``,
+``BOARD_DIR``, and ``ZEPHYR_BASE``, but additional trees, or DTS_ROOTs,
+can be added by creating this directory tree::
 
-    dts/bindings/
+    include/
     dts/common/
     dts/arm/
-    include/
+    dts/
+    dts/bindings/
 
 Where 'arm' is changed to the appropriate architecture. Each directory
 is optional. The binding directory contains bindings and the other
 directories contain files that can be included from DT sources.
 
 Once the directory structure is in place, you can use it by specifying
-its location through the ``DTS_ROOT`` CMake Cache variable::
+its location through the ``DTS_ROOT`` CMake Cache variable:
 
-   cmake -DDTS_ROOT=<path to dts root>
+.. zephyr-app-commands::
+   :tool: all
+   :board: <board name>
+   :gen-args: -DDTS_ROOT=<path to dts root>
+   :goals: build
+   :compact:
 
 You can also define the variable in the application
 :file:`CMakeLists.txt` file.
@@ -712,7 +800,7 @@ The options used above have the following meaning:
   TCP port 1234.
 
 To debug with QEMU and to start a GDB server and wait for a remote connect, run
-the following inside the build directory of an application:
+either of the following inside the build directory of an application:
 
 .. code-block:: bash
 
@@ -737,7 +825,8 @@ The :file:`.gdbinit` file contains the following lines:
 
 .. note::
 
-   Substitute ZEPHYR_BASE for the current kernel's root directory.
+   Substitute the correct :ref:`ZEPHYR_BASE <env_vars_important>` for your
+   system.
 
 Execute the application to debug from the same directory that you chose for
 the :file:`gdbinit` file. The command can include the ``--tui`` option
@@ -813,8 +902,8 @@ Set Up the Eclipse Development Environment
 Generate and Import an Eclipse Project
 ======================================
 
-#. At a command line, configure your environment to use the GCC ARM Embedded
-   compiler as shown in :ref:`third_party_x_compilers`.
+#. Set up a GNU Arm Embedded toolchain as described in
+   :ref:`third_party_x_compilers`.
 
 #. Navigate to a folder outside of the Zephyr tree to build your application.
 
@@ -837,12 +926,14 @@ Generate and Import an Eclipse Project
    argument. This will generate an Eclipse project description file,
    :file:`.project`, in addition to the usual ninja build files.
 
-   .. code-block:: console
-
-      # On Windows
-      mkdir build && cd build
-      cmake -G"Eclipse CDT4 - Ninja" -DBOARD=frdm_k64f %ZEPHYR_BASE%\samples\synchronization
-      ninja
+   .. zephyr-app-commands::
+      :tool: all
+      :app: %ZEPHYR_BASE%\samples\synchronization
+      :host-os: win
+      :board: frdm_k64f
+      :gen-args: -G"Eclipse CDT4 - Ninja"
+      :goals: build
+      :compact:
 
 #. In Eclipse, import your generated project by opening the menu
    ``File->Import...`` and selecting the option ``Existing Projects into
@@ -877,7 +968,7 @@ Create a Debugger Configuration
 
      - GDB Client Setup
 
-       - Executable path:
+       - Executable path example (use your :envvar:`GNUARMEMB_TOOLCHAIN_PATH`):
          :file:`C:\\gcc-arm-none-eabi-6_2017-q2-update\\bin\\arm-none-eabi-gdb.exe`
 
    - In the SVD Path tab:
@@ -897,6 +988,8 @@ RTOS Awareness
 Support for Zephyr RTOS awareness is implemented in `pyOCD v0.11.0`_ and later.
 It is compatible with GDB PyOCD Debugging in Eclipse, but you must enable
 CONFIG_OPENOCD_SUPPORT=y in your application.
+
+.. _cmake-details:
 
 CMake Details
 *************
@@ -970,10 +1063,12 @@ Make sure to follow these steps in order.
      precedence. This ensures you don't try to run a build with a different
      :makevar:`BOARD` value than you set during the build configuration step.
 
-   - Any value given on the CMake command line using ``-DBOARD=YOUR_BOARD``
-     will be checked for and used next.
+   - Any value given on the CMake command line (directly or indirectly via
+     ``west build``) using ``-DBOARD=YOUR_BOARD`` will be checked for and
+     used next.
 
-   - If an environment variable ``BOARD`` is set, its value will then be used.
+   - If an :ref:`environment variable <env_vars>` ``BOARD`` is set, its value
+     will then be used.
 
    - Finally, if you set ``BOARD`` in your application :file:`CMakeLists.txt`
      as described in this step, this value will be used.
@@ -994,7 +1089,7 @@ Make sure to follow these steps in order.
 
    More details are available below in :ref:`application_kconfig`.
 
-#. If your application uses a Device Tree overlay file or files other than
+#. If your application uses a devicetree overlay file or files other than
    the usual :file:`<board>.overlay`, add lines setting the
    :makevar:`DTC_OVERLAY_FILE` variable to these files appropriately.
 
@@ -1097,8 +1192,9 @@ file.
 
 1. If :makevar:`CONF_FILE` is set in :file:`CMakeLists.txt` (**before including
    the boilerplate.cmake file**), or is present in the CMake variable cache,
-   the configuration files specified in it are merged and used as the
-   application-specific settings.
+   or is specified via the ``-DCONF_FILE=<conf file(s)>`` when invoking CMake
+   (either directly or via ``west``) the configuration files specified in it
+   are merged and used as the application-specific settings.
 
 2. Otherwise (if (1.) does not apply), if a file :file:`prj_BOARD.conf` exists
    in the application directory, where :makevar:`BOARD` is the BOARD value set
@@ -1218,26 +1314,31 @@ described above in :ref:`application_set_conf`.
 
 Follow these steps to run the configuration interfaces.
 
-#. Create a build directory :file:`<home>/app/build` inside your application
-   directory and generate build files inside it with CMake:
+#. Build your application as usual using either ``west`` or ``cmake``:
+
+   .. zephyr-app-commands::
+      :tool: all
+      :cd-into:
+      :board: <board>
+      :goals: build
+      :compact:
+
+#. Use either of these commands to run the terminal-based ``menuconfig``
+   interface:
 
    .. code-block:: bash
 
-      # On Linux/macOS
-      cd ~/app
-      # On Windows
-      cd %userprofile%\app
-
-      mkdir build && cd build
-      cmake -GNinja -D<board> ..
-
-#. Use this command to run the terminal-based ``menuconfig`` interface:
+       west build -t menuconfig
 
    .. code-block:: bash
 
        ninja menuconfig
 
-   Use this command to run the graphical ``guiconfig`` interface:
+   Use either of these command to run the graphical ``guiconfig`` interface:
+
+   .. code-block:: bash
+
+       west build -t guiconfig
 
    .. code-block:: bash
 
@@ -1372,31 +1473,33 @@ docstrings at the top of ``scripts/kconfig/menuconfig.py`` and
 
 .. _application_dt:
 
-Device Tree Overlays
-====================
+Devicetree Overlays
+===================
 
-As described in :ref:`device-tree`, Zephyr uses Device Tree to
-describe the hardware it runs on. This section describes how you can
-modify an application build's device tree using overlay files. For additional
-information regarding the relationship between Device Tree and Kconfig see
-:ref:`dt_vs_kconfig`. In some cases the information contained in Device Tree
-files is closely connected to the software and might need to be modified
-using the overlay file concept. This can be relevant for many of the different
-Device Tree nodes, but is particularly useful for :ref:`certain types
-of nodes <dt-alias-chosen>`.
+As described in :ref:`device-tree`, Zephyr uses devicetree to describe the
+hardware it runs on. This section describes how you can modify an application
+build's devicetree using overlay files. For additional information regarding
+the relationship between devicetree and Kconfig see :ref:`dt_vs_kconfig`. For
+an example of how to use custom overlays with ``west build``, see
+:ref:`west-building-cmake-args`.
+
+In some cases the information contained in devicetree files is closely
+connected to the software and might need to be modified using the overlay file
+concept. This can be relevant for many of the different devicetree nodes, but
+is particularly useful for :ref:`certain types of nodes <dt-alias-chosen>`.
 
 Overlay files, which customarily have the :file:`.overlay` extension,
-contain device tree fragments which add to or modify the device tree
+contain devicetree fragments which add to or modify the devicetree
 used while building a Zephyr application. To add an overlay file or
 files to the build, set the CMake variable :makevar:`DTC_OVERLAY_FILE`
 to a whitespace-separated list of your overlay files.
 
-The Zephyr build system begins creation of a device tree by running
+The Zephyr build system begins creation of a devicetree by running
 the C preprocessor on a file which includes the following:
 
 #. Configuration options from :ref:`Kconfig <configuration_options>`.
 
-#. The board's device tree source file, which by default is the Zephyr
+#. The board's devicetree source file, which by default is the Zephyr
    file :file:`boards/<ARCHITECTURE>/<BOARD>/<BOARD>.dts`. (This location
    can be overridden by setting the :makevar:`DTS_SOURCE` CMake
    variable.)
@@ -1406,7 +1509,7 @@ the C preprocessor on a file which includes the following:
    overlays can be overridden by setting the
    :makevar:`DTS_COMMON_OVERLAYS` CMake variable.)
 
-   The file :file:`common.dts` conditionally includes device tree
+   The file :file:`common.dts` conditionally includes devicetree
    fragments based on Kconfig settings. For example, it includes a
    fragment for MCUboot chain-loading, located at
    :file:`dts/common/mcuboot.overlay`, if
@@ -1415,26 +1518,24 @@ the C preprocessor on a file which includes the following:
 #. Any file or files given by the :makevar:`DTC_OVERLAY_FILE` CMake
    variable.
 
-The Zephyr build system determines :makevar:`DTC_OVERLAY_FILE` as
-follows:
+The Zephyr build system determines the ``DTC_OVERLAY_FILE`` value by
+looking at these potential definition locations, in order, until a value
+is determined, and then stops looking:
 
-- Any value given to :makevar:`DTC_OVERLAY_FILE` in your application
-  :file:`CMakeLists.txt` (**before including the boilerplate.cmake file**),
-  passed to the the CMake command line, or present in the CMake variable cache,
-  takes precedence.
-
-- The environment variable :envvar:`DTC_OVERLAY_FILE` is checked
-  next. This mechanism is now deprecated; users should set this
-  variable using CMake instead of the environment.
-
-- If the file :file:`BOARD.overlay` exists in your application directory,
-  where ``BOARD`` is the BOARD value set earlier, it will be used.
+1. the cmake command line (``-DDTC_OVERLAY_FILE=filename``)
+#. the cmake variable cache (from a previous cmake run)
+#. a ``CMakeLists.txt`` file in your application folder
+#. a ``DTC_OVERLAY_FILE`` environment variable (deprecated)
+#. a ``boards/<BOARD>.overlay`` file in your application folder,
+   for your specified ``<BOARD>``
+#. a ``<BOARD>.overlay`` file in your application folder, for
+   your specified ``<BOARD>``
 
 If :makevar:`DTC_OVERLAY_FILE` specifies multiple files, they are
 included in order by the C preprocessor.
 
-After running the preprocessor, the final device tree used in the
-build is created by running the device tree compiler, ``dtc``, on the
+After running the preprocessor, the final devicetree used in the
+build is created by running the devicetree compiler, ``dtc``, on the
 preprocessor output.
 
 .. _application_multiple_images:
@@ -1645,6 +1746,8 @@ third-party build system.
 :zephyr_file:`samples/application_development/external_lib` is a sample
 project that demonstrates some of these features.
 
+.. _CMake: https://www.cmake.org
+.. _CMake introduction: https://cmake.org/cmake/help/latest/manual/cmake.1.html#description
 .. _Eclipse IDE for C/C++ Developers: https://www.eclipse.org/downloads/packages/eclipse-ide-cc-developers/oxygen2
 .. _GNU MCU Eclipse plug-ins: https://gnu-mcu-eclipse.github.io/plugins/install/
 .. _pyOCD v0.11.0: https://github.com/mbedmicro/pyOCD/releases/tag/v0.11.0

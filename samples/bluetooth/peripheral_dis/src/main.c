@@ -10,8 +10,8 @@
 #include <stddef.h>
 #include <string.h>
 #include <errno.h>
-#include <misc/printk.h>
-#include <misc/byteorder.h>
+#include <sys/printk.h>
+#include <sys/byteorder.h>
 #include <zephyr.h>
 
 #include <bluetooth/bluetooth.h>
@@ -29,7 +29,7 @@ static const struct bt_data ad[] = {
 static void connected(struct bt_conn *conn, u8_t err)
 {
 	if (err) {
-		printk("Connection failed (err %u)\n", err);
+		printk("Connection failed (err 0x%02x)\n", err);
 	} else {
 		printk("Connected\n");
 	}
@@ -37,7 +37,7 @@ static void connected(struct bt_conn *conn, u8_t err)
 
 static void disconnected(struct bt_conn *conn, u8_t reason)
 {
-	printk("Disconnected (reason %u)\n", reason);
+	printk("Disconnected (reason 0x%02x)\n", reason);
 }
 
 static struct bt_conn_cb conn_callbacks = {
@@ -45,19 +45,8 @@ static struct bt_conn_cb conn_callbacks = {
 	.disconnected = disconnected,
 };
 
-static int zephyr_settings_fw_load(struct settings_store *cs);
-
-static const struct settings_store_itf zephyr_settings_fw_itf = {
-	.csi_load = zephyr_settings_fw_load,
-};
-
-static struct settings_store zephyr_settings_fw_store = {
-	.cs_itf = &zephyr_settings_fw_itf
-};
-
-static int zephyr_settings_fw_load(struct settings_store *cs)
+static int settings_runtime_load(void)
 {
-
 #if defined(CONFIG_BT_GATT_DIS_SETTINGS)
 	settings_runtime_set("bt/dis/model",
 			     "Zephyr Model",
@@ -89,12 +78,6 @@ static int zephyr_settings_fw_load(struct settings_store *cs)
 	return 0;
 }
 
-int settings_backend_init(void)
-{
-	settings_src_register(&zephyr_settings_fw_store);
-	return 0;
-}
-
 void main(void)
 {
 	int err;
@@ -104,7 +87,8 @@ void main(void)
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
 	}
-	settings_load();
+
+	settings_runtime_load();
 
 	printk("Bluetooth initialized\n");
 

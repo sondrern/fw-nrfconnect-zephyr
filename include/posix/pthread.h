@@ -124,7 +124,7 @@ int pthread_cond_wait(pthread_cond_t *cv, pthread_mutex_t *mut);
  * See IEEE 1003.1
  */
 int pthread_cond_timedwait(pthread_cond_t *cv, pthread_mutex_t *mut,
-			   const struct timespec *to);
+			   const struct timespec *abstime);
 
 /**
  * @brief POSIX threading compatibility API
@@ -160,8 +160,7 @@ static inline int pthread_condattr_destroy(pthread_condattr_t *att)
  * @param name Symbol name of the mutex
  */
 #define PTHREAD_MUTEX_DEFINE(name) \
-	struct pthread_mutex name \
-		__in_section(_k_mutex, static, name) = \
+	struct pthread_mutex name = \
 	{ \
 		.lock_count = 0, \
 		.wait_q = Z_WAIT_Q_INIT(&name.wait_q),	\
@@ -225,7 +224,7 @@ int pthread_mutex_unlock(pthread_mutex_t *m);
  */
 
 int pthread_mutex_timedlock(pthread_mutex_t *m,
-			    const struct timespec *to);
+			    const struct timespec *abstime);
 
 /**
  * @brief POSIX threading compatibility API

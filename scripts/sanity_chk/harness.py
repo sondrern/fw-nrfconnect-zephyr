@@ -7,14 +7,9 @@ result_re = re.compile("(PASS|FAIL|SKIP) - (test_)?(.*)")
 class Harness:
     GCOV_START = "GCOV_COVERAGE_DUMP_START"
     GCOV_END = "GCOV_COVERAGE_DUMP_END"
-    FAULTS = [
-            "Unknown Fatal Error",
-            "MPU FAULT",
-            "Kernel Panic",
-            "Kernel OOPS",
-            "BUS FAULT",
-            "CPU Page Fault"
-            ]
+    FAULT = "ZEPHYR FATAL ERROR"
+    RUN_PASSED = "PROJECT EXECUTION SUCCESSFUL"
+    RUN_FAILED = "PROJECT EXECUTION FAILED"
 
     def __init__(self):
         self.state = None
@@ -28,18 +23,43 @@ class Harness:
         self.fail_on_fault = True
         self.fault = False
         self.capture_coverage = False
+        self.next_pattern = 0
+        self.record = None
+        self.recording = []
+        self.fieldnames = []
 
     def configure(self, instance):
-        config = instance.test.harness_config
-        self.id = instance.test.id
-        if "ignore_faults" in instance.test.tags:
+        config = instance.testcase.harness_config
+        self.id = instance.testcase.id
+        if "ignore_faults" in instance.testcase.tags:
             self.fail_on_fault = False
 
         if config:
             self.type = config.get('type', None)
-            self.regex = config.get('regex', [] )
+            self.regex = config.get('regex', [])
             self.repeat = config.get('repeat', 1)
             self.ordered = config.get('ordered', True)
+            self.record = config.get('record', {})
+
+    def process_test(self, line):
+
+        if self.RUN_PASSED in line:
+            if self.fault:
+                self.state = "failed"
+            else:
+                self.state = "passed"
+
+        if self.RUN_FAILED in line:
+            self.state = "failed"
+
+        if self.fail_on_fault:
+            if self.FAULT == line:
+                self.fault = True
+
+        if self.GCOV_START in line:
+            self.capture_coverage = True
+        elif self.GCOV_END in line:
+            self.capture_coverage = False
 
 class Console(Harness):
 
@@ -53,48 +73,52 @@ class Console(Harness):
                 self.patterns.append(re.compile(r))
 
     def handle(self, line):
-
         if self.type == "one_line":
             if self.pattern.search(line):
                 self.state = "passed"
-        elif self.type == "multi_line":
+        elif self.type == "multi_line" and self.ordered:
+            if (self.next_pattern < len(self.patterns) and
+                self.patterns[self.next_pattern].search(line)):
+                self.next_pattern += 1
+                if self.next_pattern >= len(self.patterns):
+                    self.state = "passed"
+        elif self.type == "multi_line" and not self.ordered:
             for i, pattern in enumerate(self.patterns):
                 r = self.regex[i]
                 if pattern.search(line) and not r in self.matches:
                     self.matches[r] = line
-
             if len(self.matches) == len(self.regex):
-                # check ordering
-                if self.ordered:
-                    ordered = True
-                    pos = 0
-                    for k in self.matches:
-                        if k != self.regex[pos]:
-                            ordered = False
-                        pos += 1
-
-                    if ordered:
-                        self.state = "passed"
-                    else:
-                        self.state = "failed"
-                else:
-                    self.state = "passed"
+                self.state = "passed"
 
         if self.fail_on_fault:
-            for fault in self.FAULTS:
-                if fault in line:
-                    self.fault = True
+            if self.FAULT in line:
+                self.fault = True
 
         if self.GCOV_START in line:
             self.capture_coverage = True
         elif self.GCOV_END in line:
             self.capture_coverage = False
 
+
+        if self.record:
+            pattern = re.compile(self.record.get("regex", ""))
+            match = pattern.search(line)
+            if match:
+                csv = []
+                if not self.fieldnames:
+                    for k,v in match.groupdict().items():
+                        self.fieldnames.append(k)
+
+                for k,v in match.groupdict().items():
+                    csv.append(v.strip())
+                self.recording.append(csv)
+
         if self.state == "passed":
             self.tests[self.id] = "PASS"
         else:
             self.tests[self.id] = "FAIL"
 
+        self.process_test(line)
 
 class Test(Harness):
     RUN_PASSED = "PROJECT EXECUTION SUCCESSFUL"
@@ -116,11 +140,12 @@ class Test(Harness):
             self.state = "failed"
 
         if self.fail_on_fault:
-            for fault in self.FAULTS:
-                if fault in line:
-                    self.fault = True
+            if self.FAULT in line:
+                self.fault = True
 
         if self.GCOV_START in line:
             self.capture_coverage = True
         elif self.GCOV_END in line:
             self.capture_coverage = False
+
+        self.process_test(line)

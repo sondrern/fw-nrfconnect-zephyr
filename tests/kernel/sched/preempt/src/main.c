@@ -38,7 +38,7 @@
 
 /* Two threads at each priority (to test the case of waking up a
  * thread of equal priority).  But only one metairq, as it isn't
- * technically legal to have more than one at the smae priority.
+ * technically legal to have more than one at the same priority.
  */
 const enum { METAIRQ, COOP, PREEMPTIBLE } worker_priorities[] = {
 	METAIRQ,
@@ -236,7 +236,7 @@ void validate_wakeup(int src, int target, k_tid_t last_thread)
 
 void worker(void *p1, void *p2, void *p3)
 {
-	int id = (int)p1;
+	int id = POINTER_TO_INT(p1);
 	k_tid_t curr = &worker_threads[id], prev;
 
 	ARG_UNUSED(p2);
@@ -291,7 +291,7 @@ void worker(void *p1, void *p2, void *p3)
 		if (do_sleep) {
 			u64_t start = k_uptime_get();
 
-			k_sleep(1);
+			k_sleep(K_MSEC(1));
 
 			zassert_true(k_uptime_get() - start > 0,
 				     "didn't sleep");
@@ -329,13 +329,13 @@ void test_preempt(void)
 
 		k_thread_create(&worker_threads[i],
 				worker_stacks[i], STACK_SIZE,
-				worker, (void *)i, NULL, NULL,
-				priority, 0, 0);
+				worker, INT_TO_POINTER(i), NULL, NULL,
+				priority, 0, K_NO_WAIT);
 	}
 
 	k_thread_create(&manager_thread, manager_stack, STACK_SIZE,
 			manager, NULL, NULL, NULL,
-			K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
+			K_LOWEST_APPLICATION_THREAD_PRIO, 0, K_NO_WAIT);
 
 	/* We don't control the priority of this thread so can't make
 	 * it part of the test.  Just get out of the way until the

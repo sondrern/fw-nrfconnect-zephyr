@@ -16,7 +16,7 @@ struct k_stack stack;
 
 K_THREAD_STACK_DEFINE(threadstack, STACK_SIZE);
 struct k_thread thread_data;
-static ZTEST_DMEM u32_t data[STACK_LEN] = { 0xABCD, 0x1234 };
+static ZTEST_DMEM stack_data_t data[STACK_LEN] = { 0xABCD, 0x1234 };
 struct k_sem end_sema;
 
 static void tstack_push(struct k_stack *pstack)
@@ -29,7 +29,7 @@ static void tstack_push(struct k_stack *pstack)
 
 static void tstack_pop(struct k_stack *pstack)
 {
-	u32_t rx_data;
+	stack_data_t rx_data;
 
 	for (int i = STACK_LEN - 1; i >= 0; i--) {
 		/**TESTPOINT: stack pop*/
@@ -64,7 +64,7 @@ static void tstack_thread_thread(struct k_stack *pstack)
 	k_tid_t tid = k_thread_create(&thread_data, threadstack, STACK_SIZE,
 				      tThread_entry, pstack, NULL, NULL,
 				      K_PRIO_PREEMPT(0), K_USER |
-				      K_INHERIT_PERMS, 0);
+				      K_INHERIT_PERMS, K_NO_WAIT);
 	tstack_push(pstack);
 	k_sem_take(&end_sema, K_FOREVER);
 
@@ -150,7 +150,8 @@ void test_stack_alloc_thread2thread(void)
 	/**TESTPOINT: thread-thread data passing via stack*/
 	k_tid_t tid = k_thread_create(&thread_data, threadstack, STACK_SIZE,
 					tThread_entry, &kstack_test_alloc,
-					NULL, NULL, K_PRIO_PREEMPT(0), 0, 0);
+					NULL, NULL, K_PRIO_PREEMPT(0), 0,
+					K_NO_WAIT);
 	tstack_push(&kstack_test_alloc);
 	k_sem_take(&end_sema, K_FOREVER);
 

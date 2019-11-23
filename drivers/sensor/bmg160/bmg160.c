@@ -9,15 +9,14 @@
  */
 
 #include <init.h>
-#include <sensor.h>
-#include <misc/byteorder.h>
+#include <drivers/sensor.h>
+#include <sys/byteorder.h>
 #include <kernel.h>
 #include <logging/log.h>
 
 #include "bmg160.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(BMG160);
+LOG_MODULE_REGISTER(BMG160, CONFIG_SENSOR_LOG_LEVEL);
 
 struct bmg160_device_data bmg160_data;
 

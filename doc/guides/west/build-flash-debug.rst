@@ -32,19 +32,15 @@ Building: ``west build``
 The ``build`` command helps you build Zephyr applications from source. You can
 use :ref:`west config <west-config-cmd>` to configure its behavior.
 
-This command attempts to "do what you mean" when run from a Zephyr application
-source or build directory:
+Its default behavior tries to "do what you mean":
 
-- When you run ``west build`` in an existing build directory, the board, source
-  directory, etc. are obtained from the CMake cache, and that build directory
-  is re-compiled.
+- If there is a Zephyr build directory named :file:`build` in your current
+  working directory, it is incrementally re-compiled. The same is true if you
+  run ``west build`` from a Zephyr build directory.
 
-- The same is true if a Zephyr build directory named :file:`build` exists in
-  your current working directory.
-
-- Otherwise, the source directory defaults to the current working directory, so
-  running ``west build`` from a Zephyr application's source directory compiles
-  it.
+- Otherwise, if you run ``west build`` from a Zephyr application's source
+  directory and no build directory is found, a new one is created and the
+  application is compiled in it.
 
 Basics
 ======
@@ -66,14 +62,29 @@ exactly the same name you would supply to CMake if you were to invoke it with:
 
 A build directory named :file:`build` will be created, and the application will
 be compiled there after ``west build`` runs CMake to create a build system in
-that directory. If you run ``west build`` with an existing build directory, the
-application is incrementally re-compiled without re-running CMake (you can
-force CMake to run again with ``--cmake``).
+that directory. If ``west build`` finds an existing build directory, the
+application is incrementally re-compiled there without re-running CMake. You
+can force CMake to run again with ``--cmake``.
 
 You don't need to use the ``--board`` option if you've already got an existing
 build directory; ``west build`` can figure out the board from the CMake cache.
 For new builds, the ``--board`` option, :envvar:`BOARD` environment variable,
 or ``build.board`` configuration option are checked (in that order).
+
+Examples
+========
+
+Here are some ``west build`` usage examples, grouped by area.
+
+Forcing CMake to Run Again
+--------------------------
+
+To force a CMake re-run, use the ``--cmake`` (or ``--c``) option::
+
+  west build -c
+
+Setting a Default Board
+-----------------------
 
 To configure ``west build`` to build for the ``reel_board`` by default::
 
@@ -82,14 +93,32 @@ To configure ``west build`` to build for the ``reel_board`` by default::
 (You can use any other board supported by Zephyr here; it doesn't have to be
 ``reel_board``.)
 
-To use another build directory, use ``--build-dir`` (or ``-d``)::
+.. _west-building-dirs:
 
-  west build -b <BOARD> --build-dir path/to/build/directory
+Setting Source and Build Directories
+------------------------------------
 
-To specify the application source directory explicitly, give its path as a
+To set the application source directory explicitly, give its path as a
 positional argument::
 
   west build -b <BOARD> path/to/source/directory
+
+To set the build directory explicitly, use ``--build-dir`` (or ``-d``)::
+
+  west build -b <BOARD> --build-dir path/to/build/directory
+
+To change the default build directory from :file:`build`, use the
+``build.dir-fmt`` configuration option. This lets you name build
+directories using format strings, like this::
+
+  west config build.dir-fmt "build/{board}/{app}"
+
+With the above, running ``west build -b reel_board samples/hello_world`` will
+use build directory :file:`build/reel_board/hello_world`.  See
+:ref:`west-building-config` for more details on this option.
+
+Setting the Build System Target
+-------------------------------
 
 To specify the build system target to run, use ``--target`` (or ``-t``).
 
@@ -108,10 +137,16 @@ all the files in the build directory::
 
   west build -t pristine
 
-To have ``west build`` run the ``pristine`` target before re-running CMake to
-generate a build system, use the ``--pristine`` (or ``-p``) option. For
-example, to switch board and application (which requires a pristine build
-directory) in one command::
+Pristine Builds
+---------------
+
+A *pristine* build directory is essentially a new build directory. All
+byproducts from previous builds have been removed.
+
+To have ``west build`` make the build directory pristine before re-running
+CMake to generate a build system, use the ``--pristine`` (or ``-p``)
+option. For example, to switch board and application (which requires a pristine
+build directory) in one command::
 
   west build -b qemu_x86 samples/philosophers
   west build -p -b reel_board samples/hello_world
@@ -125,24 +160,29 @@ To let west decide for you if a pristine build is needed, use ``-p auto``::
    You can run ``west config build.pristine auto`` to make this setting
    permanent.
 
-
 .. _west-building-generator:
+.. _west-building-cmake-args:
 
-To add additional arguments to the CMake invocation performed by ``west
+Additional CMake Arguments
+--------------------------
+
+To pass additional arguments to the CMake invocation performed by ``west
 build``, pass them after a ``--`` at the end of the command line.
+
+.. important::
+
+   Passing additional CMake arguments like this forces ``west build`` to re-run
+   CMake, even if a build system has already been generated.
+
+   After using ``--`` once to generate the build directory, use ``west build -d
+   <build-dir>`` on subsequent runs to do incremental builds.
 
 For example, to use the Unix Makefiles CMake generator instead of Ninja (which
 ``west build`` uses by default), run::
 
   west build -b reel_board -- -G'Unix Makefiles'
 
-.. note::
-
-   Passing additional CMake arguments like this forces ``west build`` to re-run
-   CMake, even if a build system has already been generated.
-
-As another example, to use Unix Makefiles and enable the
-`CMAKE_VERBOSE_MAKEFILE`_ option::
+To use Unix Makefiles and set `CMAKE_VERBOSE_MAKEFILE`_ to ``ON``::
 
   west build -b reel_board -- -G'Unix Makefiles' -DCMAKE_VERBOSE_MAKEFILE=ON
 
@@ -150,14 +190,17 @@ Notice how the ``--`` only appears once, even though multiple CMake arguments
 are given. All command-line arguments to ``west build`` after a ``--`` are
 passed to CMake.
 
-As a final example, to merge the :file:`file.conf` Kconfig fragment into your
-build's :file:`.config`::
+To set :ref:`DTC_OVERLAY_FILE <application_dt>` to :file:`enable-modem.overlay`,
+using that file as a :ref:`devicetree overlay <device-tree>`::
+
+  west build -b reel_board -- -DDTC_OVERLAY_FILE=enable-modem.overlay
+
+To merge the :file:`file.conf` Kconfig fragment into your build's
+:file:`.config`::
 
   west build -- -DOVERLAY_CONFIG=file.conf
 
-To force a CMake re-run, use the ``--cmake`` (or ``--c``) option::
-
-  west build -c
+.. _west-building-config:
 
 Configuration Options
 =====================
@@ -179,10 +222,30 @@ You can :ref:`configure <west-config-cmd>` ``west build`` using these options.
    * - ``build.board_warn``
      - Boolean, default ``true``. If ``false``, disables warnings when
        ``west build`` can't figure out the target board.
+   * - ``build.dir-fmt``
+     - String, default ``build``. The build folder format string, used by
+       west whenever it needs to create or locate a build folder. The currently
+       available arguments are:
+
+         - ``board``: The board name
+         - ``source_dir``: The relative path from the current working directory
+           to the source directory. If the current working directory is inside
+           the source directory this will be set to an empty string.
+         - ``app``: The name of the source directory.
    * - ``build.generator``
      - String, default ``Ninja``. The `CMake Generator`_ to use to create a
        build system. (To set a generator for a single build, see the
        :ref:`above example <west-building-generator>`)
+   * - ``build.guess-dir``
+     - String, instructs west whether to try to guess what build folder to use
+       when ``build.dir-fmt`` is in use and not enough information is available
+       to resolve the build folder name. Can take these values:
+
+         - ``never`` (default): Never try to guess, bail out instead and
+           require the user to provide a build folder with ``-d``.
+         - ``runners``: Try to guess the folder when using any of the 'runner'
+           commands.  These are typically all commands that invoke an external
+           tool, such as ``flash`` and ``debug``.
    * - ``build.pristine``
      - String. Controls the way in which ``west build`` may clean the build
        folder before building. Can take the following values:
@@ -219,10 +282,10 @@ To specify the build directory, use ``--build-dir`` (or ``-d``)::
 
   west flash --build-dir path/to/build/directory
 
-Since the build directory defaults to :file:`build`, if you do not specify
-a build directory but a folder named :file:`build` is present, that will be
-used, allowing you to flash from outside the :file:`build` folder with no
-additional parameters.
+If you don't specify the build directory, ``west flash`` searches for one in
+:file:`build`, then the current working directory. If you set the
+``build.dir-fmt`` configuration option (see :ref:`west-building-dirs`), ``west
+flash`` searches there instead of :file:`build`.
 
 Choosing a Runner
 =================
@@ -315,10 +378,10 @@ To specify the build directory, use ``--build-dir`` (or ``-d``)::
   west debug --build-dir path/to/build/directory
   west debugserver --build-dir path/to/build/directory
 
-Since the build directory defaults to :file:`build`, if you do not specify
-a build directory but a folder named :file:`build` is present, that will be
-used, allowing you to debug from outside the :file:`build` folder with no
-additional parameters.
+If you don't specify the build directory, these commands search for one in
+:file:`build`, then the current working directory. If you set the
+``build.dir-fmt`` configuration option (see :ref:`west-building-dirs`), ``west
+debug`` searches there instead of :file:`build`.
 
 Choosing a Runner
 =================
@@ -417,13 +480,22 @@ determined by the imported subclasses of ``ZephyrBinaryRunner``.
 individual runner implementations are in other submodules, such as
 ``runners.nrfjprog``, ``runners.openocd``, etc.
 
-Hacking and APIs
-****************
+Hacking
+*******
 
-Developers can add support for new ways to flash and debug Zephyr
-programs by implementing additional runners. To get this support into
-upstream Zephyr, the runner should be added into a new or existing
-``runners`` module, and imported from :file:`runner/__init__.py`.
+This section documents the ``runners.core`` module used by the
+flash and debug commands. This is the core abstraction used to implement
+support for these features.
+
+.. warning::
+
+   These APIs are provided for reference, but they are more "shared code" used
+   to implement multiple extension commands than a stable API.
+
+Developers can add support for new ways to flash and debug Zephyr programs by
+implementing additional runners. To get this support into upstream Zephyr, the
+runner should be added into a new or existing ``runners`` module, and imported
+from :file:`runners/__init__.py`.
 
 .. note::
 
@@ -434,8 +506,8 @@ upstream Zephyr, the runner should be added into a new or existing
    changes break existing test cases, CI testing on upstream pull
    requests will fail.
 
-API Documentation for the ``runners.core`` module can be found in
-:ref:`west-apis`.
+.. automodule:: runners.core
+   :members:
 
 Doing it By Hand
 ****************

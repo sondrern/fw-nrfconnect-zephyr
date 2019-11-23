@@ -5,18 +5,18 @@
  */
 
 #include <device.h>
-#include <led.h>
-#include <gpio.h>
+#include <drivers/led.h>
+#include <drivers/gpio.h>
 #include <zephyr.h>
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(main);
 
-#define LED_DEV_NAME DT_HOLTEK_HT16K33_0_LABEL
-#define KS0_DEV_NAME DT_HOLTEK_HT16K33_KEYSCAN_0_LABEL
-#define KS1_DEV_NAME DT_HOLTEK_HT16K33_KEYSCAN_1_LABEL
-#define KS2_DEV_NAME DT_HOLTEK_HT16K33_KEYSCAN_2_LABEL
+#define LED_DEV_NAME DT_INST_0_HOLTEK_HT16K33_LABEL
+#define KS0_DEV_NAME DT_INST_0_HOLTEK_HT16K33_KEYSCAN_LABEL
+#define KS1_DEV_NAME DT_INST_1_HOLTEK_HT16K33_KEYSCAN_LABEL
+#define KS2_DEV_NAME DT_INST_2_HOLTEK_HT16K33_KEYSCAN_LABEL
 
 #define KEYSCAN_DEVICES 3
 
@@ -68,7 +68,7 @@ void main(void)
 			"one-by-one");
 		for (i = 0; i < 128; i++) {
 			led_on(led_dev, i);
-			k_sleep(100);
+			k_sleep(K_MSEC(100));
 		}
 
 		for (i = 500; i <= 2000; i *= 2) {
@@ -81,7 +81,7 @@ void main(void)
 		for (i = 100; i >= 0; i -= 10) {
 			LOG_INF("Setting LED brightness to %d%%", i);
 			led_set_brightness(led_dev, 0, i);
-			k_sleep(1000);
+			k_sleep(K_MSEC(1000));
 		}
 
 		LOG_INF("Turning all LEDs off and restoring 100%% brightness");

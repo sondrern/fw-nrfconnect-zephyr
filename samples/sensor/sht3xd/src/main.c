@@ -6,7 +6,7 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
+#include <drivers/sensor.h>
 #include <stdio.h>
 
 #define ALERT_HUMIDITY 40
@@ -84,6 +84,6 @@ void main(void)
 		       sensor_value_to_double(&temp),
 		       sensor_value_to_double(&hum));
 
-		k_sleep(2000);
+		k_sleep(K_MSEC(2000));
 	}
 }

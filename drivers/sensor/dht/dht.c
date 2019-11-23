@@ -5,18 +5,17 @@
  */
 
 #include <device.h>
-#include <gpio.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
-#include <sensor.h>
+#include <drivers/gpio.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
+#include <drivers/sensor.h>
 #include <string.h>
 #include <zephyr.h>
 #include <logging/log.h>
 
 #include "dht.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(DHT);
+LOG_MODULE_REGISTER(DHT, CONFIG_SENSOR_LOG_LEVEL);
 
 /**
  * @brief Measure duration of signal send by sensor

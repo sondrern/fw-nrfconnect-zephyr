@@ -15,7 +15,7 @@
 
 #include <zephyr.h>
 #include <ztest.h>
-#include <i2s.h>
+#include <drivers/i2s.h>
 #include "i2s_api_test.h"
 
 #define NUM_RX_BLOCKS 4
@@ -417,5 +417,5 @@ void test_i2s_state_error_neg(void)
 	ret = rx_block_read(dev_i2s, 0);
 	zassert_equal(ret, TC_PASS, NULL);
 
-	k_sleep(200);
+	k_sleep(K_MSEC(200));
 }

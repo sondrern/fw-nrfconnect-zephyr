@@ -9,7 +9,7 @@
 
 #include <toolchain.h>
 #include <zephyr/types.h>
-#include <misc/util.h>
+#include <sys/util.h>
 #include <drivers/clock_control/nrf_clock_control.h>
 
 #include "util/mem.h"
@@ -305,8 +305,6 @@ lll_conn_isr_rx_exit:
 	}
 
 	if (is_rx_enqueue) {
-		LL_ASSERT(lll->handle != 0xFFFF);
-
 		ull_pdu_rx_alloc();
 
 		node_rx->hdr.type = NODE_RX_TYPE_DC_PDU;
@@ -419,6 +417,18 @@ void lll_conn_isr_tx(void *param)
 
 void lll_conn_isr_abort(void *param)
 {
+	/* Clear radio status and events */
+	radio_status_reset();
+	radio_tmr_status_reset();
+	radio_filter_status_reset();
+	radio_ar_status_reset();
+	radio_rssi_status_reset();
+
+	if (IS_ENABLED(CONFIG_BT_CTLR_GPIO_PA_PIN) ||
+	    IS_ENABLED(CONFIG_BT_CTLR_GPIO_LNA_PIN)) {
+		radio_gpio_pa_lna_disable();
+	}
+
 	isr_cleanup(param);
 }
 
@@ -634,6 +644,8 @@ static void isr_done(void *param)
 	/* TODO: MOVE ^^ */
 
 	e = ull_event_done_extra_get();
+	LL_ASSERT(e);
+
 	e->type = EVENT_DONE_EXTRA_TYPE_CONN;
 	e->trx_cnt = trx_cnt;
 	e->crc_valid = crc_valid;
@@ -744,7 +756,10 @@ static int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 				memq_dequeue(lll->memq_tx.tail,
 					     &lll->memq_tx.head, NULL);
 
-				link->next = tx->next;
+				/* TX node UPSTREAM, i.e. Tx node ack path */
+				link->next = tx->next; /* Indicates ctrl or data
+							* pool.
+							*/
 				tx->next = link;
 
 				*tx_release = tx;
@@ -838,4 +853,9 @@ static struct pdu_data *empty_tx_enqueue(struct lll_conn *lll)
 	}
 
 	return p;
+}
+
+void lll_conn_flush(struct lll_conn *lll)
+{
+	/* Nothing to be flushed */
 }

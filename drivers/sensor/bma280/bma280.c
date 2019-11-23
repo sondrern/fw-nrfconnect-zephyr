@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <i2c.h>
+#include <drivers/i2c.h>
 #include <init.h>
-#include <sensor.h>
-#include <misc/__assert.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
 #include "bma280.h"
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(BMA280);
+LOG_MODULE_REGISTER(BMA280, CONFIG_SENSOR_LOG_LEVEL);
 
 static int bma280_sample_fetch(struct device *dev, enum sensor_channel chan)
 {

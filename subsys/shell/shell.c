@@ -6,7 +6,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
-#include <atomic.h>
+#include <sys/atomic.h>
 #include <shell/shell.h>
 #include <shell/shell_dummy.h>
 #include "shell_ops.h"
@@ -801,6 +801,14 @@ static void ctrl_metakeys_handle(const struct shell *shell, char data)
 		shell_print_prompt_and_cmd(shell);
 		break;
 
+	case SHELL_VT100_ASCII_CTRL_N: /* CTRL + N */
+		history_handle(shell, false);
+		break;
+
+	case SHELL_VT100_ASCII_CTRL_P: /* CTRL + P */
+		history_handle(shell, true);
+		break;
+
 	case SHELL_VT100_ASCII_CTRL_U: /* CTRL + U */
 		shell_op_cursor_home_move(shell);
 		cmd_buffer_clear(shell);
@@ -1112,7 +1120,7 @@ static int instance_uninit(const struct shell *shell)
 		return -EBUSY;
 	}
 
-	if (IS_ENABLED(CONFIG_LOG)) {
+	if (IS_ENABLED(CONFIG_SHELL_LOG_BACKEND)) {
 		/* todo purge log queue */
 		shell_log_backend_disable(shell->log_backend);
 	}
@@ -1156,9 +1164,9 @@ static void kill_handler(const struct shell *shell)
 void shell_thread(void *shell_handle, void *arg_log_backend,
 		  void *arg_log_level)
 {
-	struct shell *shell = (struct shell *)shell_handle;
+	struct shell *shell = shell_handle;
 	bool log_backend = (bool)arg_log_backend;
-	u32_t log_level = (u32_t)arg_log_level;
+	u32_t log_level = POINTER_TO_UINT(arg_log_level);
 	int err;
 
 	err = shell->iface->api->enable(shell->iface, false);
@@ -1166,7 +1174,7 @@ void shell_thread(void *shell_handle, void *arg_log_backend,
 		return;
 	}
 
-	if (log_backend && IS_ENABLED(CONFIG_LOG)) {
+	if (log_backend && IS_ENABLED(CONFIG_SHELL_LOG_BACKEND)) {
 		shell_log_backend_enable(shell->log_backend, (void *)shell,
 					 log_level);
 	}
@@ -1196,7 +1204,7 @@ void shell_thread(void *shell_handle, void *arg_log_backend,
 
 		shell_signal_handle(shell, SHELL_SIGNAL_KILL, kill_handler);
 		shell_signal_handle(shell, SHELL_SIGNAL_RXRDY, shell_process);
-		if (IS_ENABLED(CONFIG_LOG)) {
+		if (IS_ENABLED(CONFIG_SHELL_LOG_BACKEND)) {
 			shell_signal_handle(shell, SHELL_SIGNAL_LOG_MSG,
 					    shell_log_process);
 		}
@@ -1220,7 +1228,7 @@ int shell_init(const struct shell *shell, const void *transport_config,
 	k_tid_t tid = k_thread_create(shell->thread,
 			      shell->stack, CONFIG_SHELL_STACK_SIZE,
 			      shell_thread, (void *)shell, (void *)log_backend,
-			      (void *)init_log_level,
+			      UINT_TO_POINTER(init_log_level),
 			      K_LOWEST_APPLICATION_THREAD_PRIO, 0, K_NO_WAIT);
 
 	shell->ctx->tid = tid;
@@ -1327,7 +1335,7 @@ void shell_fprintf(const struct shell *shell, enum shell_vt100_color color,
 	__ASSERT_NO_MSG(shell->fprintf_ctx);
 	__ASSERT_NO_MSG(fmt);
 
-	va_list args = { 0 };
+	va_list args;
 
 	k_mutex_lock(&shell->ctx->wr_mtx, K_FOREVER);
 	if (!flag_cmd_ctx_get(shell)) {
@@ -1401,7 +1409,7 @@ int shell_execute_cmd(const struct shell *shell, const char *cmd)
 	}
 
 	if (shell == NULL) {
-#if CONFIG_SHELL_BACKEND_DUMMY
+#if defined(CONFIG_SHELL_BACKEND_DUMMY)
 		shell = shell_backend_dummy_get_ptr();
 #else
 		return -EINVAL;

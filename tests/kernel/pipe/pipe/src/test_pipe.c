@@ -19,8 +19,8 @@ K_SEM_DEFINE(sync_sem, 0, 1);
 K_SEM_DEFINE(multiple_send_sem, 0, 1);
 
 
-ZTEST_BMEM u8_t tx_buffer[PIPE_SIZE];
-ZTEST_BMEM u8_t rx_buffer[PIPE_SIZE];
+ZTEST_BMEM u8_t tx_buffer[PIPE_SIZE + 1];
+ZTEST_BMEM u8_t rx_buffer[PIPE_SIZE + 1];
 
 #define TOTAL_ELEMENTS (sizeof(single_elements) / sizeof(struct pipe_sequence))
 #define TOTAL_WAIT_ELEMENTS (sizeof(wait_elements) / \
@@ -675,19 +675,15 @@ void pipe_put_get_timeout(void)
 
 /******************************************************************************/
 ZTEST_BMEM bool valid_fault;
-void z_SysFatalErrorHandler(unsigned int reason, const NANO_ESF *pEsf)
+void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *pEsf)
 {
 	printk("Caught system error -- reason %d\n", reason);
 	if (valid_fault) {
 		valid_fault = false; /* reset back to normal */
 		ztest_test_pass();
 	} else {
-		ztest_test_fail();
+		k_fatal_halt(reason);
 	}
-#if !(defined(CONFIG_ARM) || defined(CONFIG_ARC))
-	CODE_UNREACHABLE;
-#endif
-
 }
 /******************************************************************************/
 /* Test case entry points */
@@ -705,7 +701,8 @@ void test_pipe_on_single_elements(void)
 
 	k_thread_create(&get_single_tid, stack_1, STACK_SIZE,
 			pipe_get_single, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER, 0);
+			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER,
+			K_NO_WAIT);
 
 	pipe_put_single();
 	k_sem_take(&sync_sem, K_FOREVER);
@@ -722,7 +719,8 @@ void test_pipe_on_multiple_elements(void)
 {
 	k_thread_create(&get_single_tid, stack_1, STACK_SIZE,
 			pipe_get_multiple, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER, 0);
+			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER,
+			K_NO_WAIT);
 
 	pipe_put_multiple();
 	k_sem_take(&sync_sem, K_FOREVER);
@@ -739,7 +737,8 @@ void test_pipe_forever_wait(void)
 {
 	k_thread_create(&get_single_tid, stack_1, STACK_SIZE,
 			pipe_get_forever_wait, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER, 0);
+			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER,
+			K_NO_WAIT);
 
 	pipe_put_forever_wait();
 	k_sem_take(&sync_sem, K_FOREVER);
@@ -756,7 +755,8 @@ void test_pipe_timeout(void)
 {
 	k_thread_create(&get_single_tid, stack_1, STACK_SIZE,
 			pipe_get_timeout, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER, 0);
+			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER,
+			K_NO_WAIT);
 
 	pipe_put_timeout();
 	k_sem_take(&sync_sem, K_FOREVER);
@@ -788,7 +788,8 @@ void test_pipe_forever_timeout(void)
 
 	k_thread_create(&get_single_tid, stack_1, STACK_SIZE,
 			pipe_get_forever_timeout, NULL, NULL, NULL,
-			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER, 0);
+			K_PRIO_PREEMPT(0), K_INHERIT_PERMS | K_USER,
+			K_NO_WAIT);
 
 	pipe_put_forever_timeout();
 	k_sem_take(&sync_sem, K_FOREVER);

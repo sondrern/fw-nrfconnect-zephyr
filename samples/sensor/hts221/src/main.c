@@ -6,9 +6,9 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <sensor.h>
+#include <drivers/sensor.h>
 #include <stdio.h>
-#include <misc/util.h>
+#include <sys/util.h>
 
 static void process_sample(struct device *dev)
 {
@@ -68,7 +68,7 @@ void main(void)
 
 	while (!IS_ENABLED(CONFIG_HTS221_TRIGGER)) {
 		process_sample(dev);
-		k_sleep(2000);
+		k_sleep(K_MSEC(2000));
 	}
 	k_sleep(K_FOREVER);
 }

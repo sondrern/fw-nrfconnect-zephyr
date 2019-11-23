@@ -65,17 +65,10 @@
 # https://cmake.org/cmake/help/latest/command/target_sources.html
 function(zephyr_sources)
   foreach(arg ${ARGV})
-    if(IS_ABSOLUTE ${arg})
-      set(path ${arg})
-    else()
-      set(path ${CMAKE_CURRENT_SOURCE_DIR}/${arg})
-    endif()
-
-    if(IS_DIRECTORY ${path})
+    if(IS_DIRECTORY ${arg})
       message(FATAL_ERROR "zephyr_sources() was called on a directory")
     endif()
-
-    target_sources(${IMAGE}zephyr PRIVATE ${path})
+    target_sources(${IMAGE}zephyr PRIVATE ${arg})
   endforeach()
 endfunction()
 
@@ -372,7 +365,7 @@ endmacro()
 # or zephyr_library_named. The constructors create a CMake library
 # with a name accessible through the variable ZEPHYR_CURRENT_LIBRARY.
 #
-# The variable ZEPHYR_CURRENT_LIBRARY should seldomly be needed since
+# The variable ZEPHYR_CURRENT_LIBRARY should seldom be needed since
 # the zephyr libraries have methods that modify the libraries. These
 # methods have the signature: zephyr_library_<target-function>
 #
@@ -391,15 +384,15 @@ endmacro()
 
 # Constructor with a directory-inferred name
 macro(zephyr_library)
-  zephyr_library_get_current_dir_lib_name(lib_name)
+  zephyr_library_get_current_dir_lib_name(${ZEPHYR_BASE} lib_name)
   zephyr_library_named(${lib_name})
 endmacro()
 
-# Determines what the current directory's lib name would be and writes
-# it to the argument "lib_name"
-macro(zephyr_library_get_current_dir_lib_name lib_name)
+# Determines what the current directory's lib name would be according to the
+# provided base and writes it to the argument "lib_name"
+macro(zephyr_library_get_current_dir_lib_name base lib_name)
   # Remove the prefix (/home/sebo/zephyr/driver/serial/CMakeLists.txt => driver/serial/CMakeLists.txt)
-  file(RELATIVE_PATH name ${ZEPHYR_BASE} ${CMAKE_CURRENT_LIST_FILE})
+  file(RELATIVE_PATH name ${base} ${CMAKE_CURRENT_LIST_FILE})
 
   # Remove the filename (driver/serial/CMakeLists.txt => driver/serial)
   get_filename_component(name ${name} DIRECTORY)
@@ -422,6 +415,34 @@ macro(zephyr_library_named name)
   target_link_libraries(${ZEPHYR_CURRENT_LIBRARY} PUBLIC ${IMAGE}zephyr_interface)
 endmacro()
 
+# Provides amend functionality to a Zephyr library for out-of-tree usage.
+#
+# When called from a Zephyr module, the corresponding zephyr library defined
+# within Zephyr will be looked up.
+#
+# Note, in order to ensure correct library when amending, the folder structure in the
+# Zephyr module must resemble the structure used in Zephyr, as example:
+#
+# Example: to amend the zephyr library created in
+# ZEPHYR_BASE/drivers/entropy/CMakeLists.txt
+# add the following file:
+# ZEPHYR_MODULE/drivers/entropy/CMakeLists.txt
+# with content:
+# zephyr_library_amend()
+# zephyr_libray_add_sources(...)
+#
+macro(zephyr_library_amend)
+  # This is a macro because we need to ensure the ZEPHYR_CURRENT_LIBRARY and
+  # following zephyr_library_* calls are executed within the scope of the
+  # caller.
+  if(NOT ZEPHYR_CURRENT_MODULE_DIR)
+    message(FATAL_ERROR "Function only available for Zephyr modules.")
+  endif()
+
+  zephyr_library_get_current_dir_lib_name(${ZEPHYR_CURRENT_MODULE_DIR} lib_name)
+
+  set(ZEPHYR_CURRENT_LIBRARY ${IMAGE}${lib_name})
+endmacro()
 
 function(zephyr_link_interface interface)
   target_link_libraries(${interface} INTERFACE ${IMAGE}zephyr_interface)
@@ -500,6 +521,19 @@ function(zephyr_library_import library_name library_path)
     ${library_path}
     )
   zephyr_append_cmake_library(${library_name})
+endfunction()
+
+# Place the current zephyr library in the application memory partition.
+#
+# The partition argument is the name of the partition where the library shall
+# be placed.
+#
+# Note: Ensure the given partition has been define using
+#       K_APPMEM_PARTITION_DEFINE in source code.
+function(zephyr_library_app_memory partition)
+  set_property(TARGET ${IMAGE}zephyr_property_target
+               APPEND PROPERTY COMPILE_OPTIONS
+               "-l" $<TARGET_FILE_NAME:${ZEPHYR_CURRENT_LIBRARY}> "${partition}")
 endfunction()
 
 # 1.2.1 zephyr_interface_library_*
@@ -601,6 +635,66 @@ endfunction()
 # This section provides glue between CMake and the Python code that
 # manages the runners.
 
+function(_board_check_runner_type type) # private helper
+  if (NOT (("${type}" STREQUAL "FLASH") OR ("${type}" STREQUAL "DEBUG")))
+    message(FATAL_ERROR "invalid type ${type}; should be FLASH or DEBUG")
+  endif()
+endfunction()
+
+# This function sets the runner for the board unconditionally.  It's
+# meant to be used from application CMakeLists.txt files.
+#
+# NOTE: Usually board_set_xxx_ifnset() is best in board.cmake files.
+#       This lets the user set the runner at cmake time, or in their
+#       own application's CMakeLists.txt.
+#
+# Usage:
+#   board_set_runner(FLASH pyocd)
+#
+# This would set the board's flash runner to "pyocd".
+#
+# In general, "type" is FLASH or DEBUG, and "runner" is the name of a
+# runner.
+function(board_set_runner type runner)
+  _board_check_runner_type(${type})
+  if (DEFINED BOARD_${type}_RUNNER)
+    message(STATUS "overriding ${type} runner ${BOARD_${type}_RUNNER}; it's now ${runner}")
+  endif()
+  set(BOARD_${type}_RUNNER ${runner} PARENT_SCOPE)
+endfunction()
+
+# This macro is like board_set_runner(), but will only make a change
+# if that runner is currently not set.
+#
+# See also board_set_flasher_ifnset() and board_set_debugger_ifnset().
+macro(board_set_runner_ifnset type runner)
+  _board_check_runner_type(${type})
+  # This is a macro because set_ifndef() works at parent scope.
+  # If this were a function, that would be this function's scope,
+  # which wouldn't work.
+  set_ifndef(BOARD_${type}_RUNNER ${runner})
+endmacro()
+
+# A convenience macro for board_set_runner(FLASH ${runner}).
+macro(board_set_flasher runner)
+  board_set_runner(FLASH ${runner})
+endmacro()
+
+# A convenience macro for board_set_runner(DEBUG ${runner}).
+macro(board_set_debugger runner)
+  board_set_runner(DEBUG ${runner})
+endmacro()
+
+# A convenience macro for board_set_runner_ifnset(FLASH ${runner}).
+macro(board_set_flasher_ifnset runner)
+  board_set_runner_ifnset(FLASH ${runner})
+endmacro()
+
+# A convenience macro for board_set_runner_ifnset(DEBUG ${runner}).
+macro(board_set_debugger_ifnset runner)
+  board_set_runner_ifnset(DEBUG ${runner})
+endmacro()
+
 # This function is intended for board.cmake files and application
 # CMakeLists.txt files.
 #
@@ -698,13 +792,6 @@ function(zephyr_check_compiler_flag lang option check)
     ZEPHYR_TOOLCHAIN_CAPABILITY_CACHE_DIR
     ${USER_CACHE_DIR}/ToolchainCapabilityDatabase
     )
-  if(DEFINED ZEPHYR_TOOLCHAIN_CAPABILITY_CACHE)
-    assert(0
-      "The deprecated ZEPHYR_TOOLCHAIN_CAPABILITY_CACHE is now a directory"
-      "and is named ZEPHYR_TOOLCHAIN_CAPABILITY_CACHE_DIR"
-      )
-    # Remove this deprecation warning in version 1.14.
-  endif()
 
   # The toolchain capability database/cache is maintained as a
   # directory of files. The filenames in the directory are keys, and
@@ -743,8 +830,17 @@ function(zephyr_check_compiler_flag lang option check)
     return()
   endif()
 
-  # Test the flag
-  check_compiler_flag(${lang} "${option}" inner_check)
+  # Flags that start with -Wno-<warning> can not be tested by
+  # check_compiler_flag, they will always pass, but -W<warning> can be
+  # tested, so to test -Wno-<warning> flags we test -W<warning>
+  # instead.
+  if("${option}" MATCHES "-Wno-(.*)")
+    set(possibly_translated_option -W${CMAKE_MATCH_1})
+  else()
+    set(possibly_translated_option ${option})
+  endif()
+
+  check_compiler_flag(${lang} "${possibly_translated_option}" inner_check)
 
   set(${check} ${inner_check} PARENT_SCOPE)
 
@@ -812,7 +908,7 @@ endfunction()
 #    _mysection_size = ABSOLUTE(_mysection_end - _mysection_start);
 #
 # When placing into SECTIONS or RAM_SECTIONS, the files must instead define
-# their own output sections to acheive the same thing:
+# their own output sections to achieve the same thing:
 #    SECTION_PROLOGUE(.mysection,,)
 #    {
 #        _mysection_start = .;
@@ -1322,10 +1418,10 @@ macro(assert test comment)
 endmacro()
 
 # Usage:
-#   assert_not(FLASH_SCRIPT "FLASH_SCRIPT has been removed; use BOARD_FLASH_RUNNER")
+#   assert_not(OBSOLETE_VAR "OBSOLETE_VAR has been removed; use NEW_VAR instead")
 #
-# will cause a FATAL_ERROR and print an errorm essage if the first
-# espression is true
+# will cause a FATAL_ERROR and print an error message if the first
+# expression is true
 macro(assert_not test comment)
   if(${test})
     message(FATAL_ERROR "Assertion failed: ${comment}")

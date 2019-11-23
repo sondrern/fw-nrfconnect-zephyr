@@ -18,13 +18,13 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <errno.h>
 #include <init.h>
 #include <kernel.h>
-#include <misc/__assert.h>
+#include <sys/__assert.h>
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys_io.h>
+#include <sys/sys_io.h>
 #include <net/ethernet.h>
 #include "ethernet/eth_stats.h"
 
@@ -106,7 +106,7 @@ int smsc_phy_regread(u8_t regoffset, u32_t *data)
 
 	val = 0U;
 	do {
-		k_sleep(1);
+		k_sleep(K_MSEC(1));
 		time_out--;
 		if (smsc_mac_regread(SMSC9220_MAC_MII_ACC, &val)) {
 			return -1;
@@ -152,7 +152,7 @@ int smsc_phy_regwrite(u8_t regoffset, u32_t data)
 	}
 
 	do {
-		k_sleep(1);
+		k_sleep(K_MSEC(1));
 		time_out--;
 		if (smsc_mac_regread(SMSC9220_MAC_MII_ACC, &phycmd)) {
 			return -1;
@@ -222,7 +222,7 @@ static int smsc_soft_reset(void)
 	SMSC9220->HW_CFG |= HW_CFG_SRST;
 
 	do {
-		k_sleep(1);
+		k_sleep(K_MSEC(1));
 		time_out--;
 	} while (time_out != 0U && (SMSC9220->HW_CFG & HW_CFG_SRST));
 
@@ -402,7 +402,7 @@ int smsc_init(void)
 	SMSC9220->FIFO_INT &= ~(0xFF);  /* Clear 2 bottom nibbles */
 
 	/* This sleep is compulsory otherwise txmit/receive will fail. */
-	k_sleep(2000);
+	k_sleep(K_MSEC(2000));
 
 	return 0;
 }
@@ -659,8 +659,8 @@ static struct device DEVICE_NAME_GET(eth_smsc911x_0);
 
 int eth_init(struct device *dev)
 {
-	IRQ_CONNECT(DT_SMSC_LAN9220_0_IRQ_0,
-		    DT_SMSC_LAN9220_0_IRQ_0_PRIORITY,
+	IRQ_CONNECT(DT_INST_0_SMSC_LAN9220_IRQ_0,
+		    DT_INST_0_SMSC_LAN9220_IRQ_0_PRIORITY,
 		    eth_smsc911x_isr, DEVICE_GET(eth_smsc911x_0), 0);
 
 	int ret = smsc_init();
@@ -670,7 +670,7 @@ int eth_init(struct device *dev)
 		return -ENODEV;
 	}
 
-	irq_enable(DT_SMSC_LAN9220_0_IRQ_0);
+	irq_enable(DT_INST_0_SMSC_LAN9220_IRQ_0);
 
 	return ret;
 }

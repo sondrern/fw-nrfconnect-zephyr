@@ -6,15 +6,14 @@
 
 
 #include <init.h>
-#include <misc/byteorder.h>
-#include <misc/__assert.h>
+#include <sys/byteorder.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(lis2dh);
+LOG_MODULE_REGISTER(lis2dh, CONFIG_SENSOR_LOG_LEVEL);
 #include "lis2dh.h"
 
-#if defined(DT_ST_LIS2DH_0_BUS_SPI)
+#if defined(DT_ST_LIS2DH_BUS_SPI)
 int lis2dh_spi_access(struct lis2dh_data *ctx, u8_t cmd,
 		      void *data, size_t length)
 {
@@ -144,7 +143,7 @@ static int lis2dh_sample_fetch(struct device *dev, enum sensor_channel chan)
 
 	for (i = 0; i < (3 * sizeof(s16_t)); i += sizeof(s16_t)) {
 		s16_t *sample =
-			(s16_t *)&lis2dh->sample.raw[LIS2DH_DATA_OFS + 1 + i];
+			(s16_t *)&lis2dh->sample.raw[1 + i];
 
 		*sample = sys_le16_to_cpu(*sample);
 	}
@@ -316,7 +315,7 @@ int lis2dh_init(struct device *dev)
 {
 	struct lis2dh_data *lis2dh = dev->driver_data;
 	int status;
-	u8_t raw[LIS2DH_DATA_OFS + 6];
+	u8_t raw[6];
 
 	status = lis2dh_bus_configure(dev);
 	if (status < 0) {
@@ -329,7 +328,7 @@ int lis2dh_init(struct device *dev)
 	 * Default values see LIS2DH documentation page 30, chapter 6.
 	 */
 	(void)memset(raw, 0, sizeof(raw));
-	raw[LIS2DH_DATA_OFS] = LIS2DH_ACCEL_EN_BITS;
+	raw[0] = LIS2DH_ACCEL_EN_BITS;
 
 	status = lis2dh_burst_write(dev, LIS2DH_REG_CTRL1, raw,
 				    sizeof(raw));
@@ -341,7 +340,7 @@ int lis2dh_init(struct device *dev)
 	/* set full scale range and store it for later conversion */
 	lis2dh->scale = LIS2DH_ACCEL_SCALE(1 << (LIS2DH_FS_IDX + 1));
 	status = lis2dh_reg_write_byte(dev, LIS2DH_REG_CTRL4,
-				       LIS2DH_FS_BITS);
+				       LIS2DH_FS_BITS | LIS2DH_HR_BIT);
 	if (status < 0) {
 		LOG_ERR("Failed to set full scale ctrl register.");
 		return status;
@@ -367,6 +366,6 @@ int lis2dh_init(struct device *dev)
 
 static struct lis2dh_data lis2dh_driver;
 
-DEVICE_AND_API_INIT(lis2dh, DT_ST_LIS2DH_0_LABEL, lis2dh_init, &lis2dh_driver,
+DEVICE_AND_API_INIT(lis2dh, DT_INST_0_ST_LIS2DH_LABEL, lis2dh_init, &lis2dh_driver,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &lis2dh_driver_api);

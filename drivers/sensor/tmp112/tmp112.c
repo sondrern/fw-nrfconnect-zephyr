@@ -5,16 +5,15 @@
  */
 
 #include <device.h>
-#include <i2c.h>
-#include <misc/byteorder.h>
-#include <misc/util.h>
+#include <drivers/i2c.h>
+#include <sys/byteorder.h>
+#include <sys/util.h>
 #include <kernel.h>
-#include <sensor.h>
-#include <misc/__assert.h>
+#include <drivers/sensor.h>
+#include <sys/__assert.h>
 #include <logging/log.h>
 
-#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
-LOG_MODULE_REGISTER(TMP112);
+LOG_MODULE_REGISTER(TMP112, CONFIG_SENSOR_LOG_LEVEL);
 
 #define TMP112_I2C_ADDRESS		CONFIG_TMP112_I2C_ADDR
 
